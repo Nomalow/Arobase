@@ -1,0 +1,1862 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>arobase — Supervision multi-sites</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%237C8CFF'/%3E%3Ctext x='16' y='23' font-family='Archivo,sans-serif' font-size='22' font-weight='800' text-anchor='middle' fill='%230A161E'%3E@%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0A161E; --panel:#0F212D; --panel-2:#153040; --panel-3:#1B3D50;
+  --line:#1E3A4C; --line-soft:rgba(255,255,255,.07);
+  --text:#E6F1F6; --dim:#93AFBE; --faint:#5F7D8C;
+  --accent:#7C8CFF; --accent-2:#A6B0FF; --accent-dim:rgba(124,140,255,.14);
+  --ok:#34C77B; --warn:#F2B33D; --crit:#FF5F56; --idle:#33505F; --info:#4FC3E8;
+  --r:10px; --r-sm:6px;
+  --f-ui:"Instrument Sans",system-ui,sans-serif;
+  --f-dis:"Archivo",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,monospace;
+  --rail:236px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--ink); color:var(--text); font-family:var(--f-ui);
+  font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(1200px 600px at 80% -10%, rgba(124,140,255,.07), transparent 60%);
+  background-attachment:fixed;
+}
+h1,h2,h3,h4{font-family:var(--f-dis);margin:0;letter-spacing:-.02em}
+a{color:inherit}
+button{font-family:inherit;font-size:inherit;color:inherit;background:none;border:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px;border-radius:4px}
+::selection{background:var(--accent);color:#0A161E}
+/* ---------- scrollbars ---------- */
+*::-webkit-scrollbar{width:9px;height:9px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{background:#22485D;border-radius:8px}
+*::-webkit-scrollbar-thumb:hover{background:#2F6280}
+
+/* ---------- shell ---------- */
+.app{display:grid;grid-template-columns:var(--rail) 1fr;min-height:100vh}
+.rail{
+  border-right:1px solid var(--line);background:rgba(8,18,25,.72);
+  position:sticky;top:0;height:100vh;display:flex;flex-direction:column;
+}
+.brand{padding:18px 18px 14px;border-bottom:1px solid var(--line);display:flex;gap:11px;align-items:center}
+.brand .mark{width:30px;height:30px;border-radius:7px;background:linear-gradient(150deg,var(--accent),#4E5ED6);display:grid;place-items:center;flex:none;box-shadow:0 0 0 1px rgba(255,255,255,.12) inset}
+.brand .mark{font-family:var(--f-dis);font-weight:800;font-size:19px;line-height:1;color:#0A161E;padding-bottom:2px}
+.brand b{font-family:var(--f-dis);font-weight:800;font-size:17px;letter-spacing:-.01em;display:block;line-height:1.1}
+.brand small{font-family:var(--f-mono);font-size:10px;color:var(--faint);letter-spacing:.13em;text-transform:uppercase}
+.nav{overflow-y:auto;padding:12px 10px 20px;flex:1}
+.nav-group{margin:14px 0 6px;padding:0 8px;font-family:var(--f-mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+.nav-item{
+  width:100%;display:flex;align-items:center;gap:10px;padding:8px 9px;border-radius:var(--r-sm);
+  color:var(--dim);text-align:left;transition:background .14s,color .14s;position:relative;
+}
+.nav-item:hover{background:rgba(255,255,255,.04);color:var(--text)}
+.nav-item.on{background:var(--accent-dim);color:#fff}
+.nav-item.on::before{content:"";position:absolute;left:-10px;top:8px;bottom:8px;width:2px;background:var(--accent);border-radius:0 2px 2px 0}
+.nav-item .led{flex:none}
+.nav-item .k{margin-left:auto;font-family:var(--f-mono);font-size:10px;color:var(--faint)}
+.rail-foot{border-top:1px solid var(--line);padding:12px 14px;display:flex;gap:10px;align-items:center}
+.avatar{width:28px;height:28px;border-radius:7px;background:var(--panel-3);display:grid;place-items:center;font-family:var(--f-mono);font-size:11px;color:var(--accent-2);flex:none}
+
+/* ---------- topbar ---------- */
+.main{min-width:0;display:flex;flex-direction:column}
+.topbar{
+  position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:14px;
+  padding:12px 22px;border-bottom:1px solid var(--line);
+  background:rgba(10,22,30,.86);backdrop-filter:blur(10px);
+}
+.crumb{font-family:var(--f-mono);font-size:11px;color:var(--faint);letter-spacing:.06em}
+.crumb b{color:var(--dim);font-weight:500}
+.search{
+  margin-left:auto;display:flex;align-items:center;gap:8px;background:var(--panel);
+  border:1px solid var(--line);border-radius:8px;padding:6px 10px;min-width:230px;color:var(--faint)
+}
+.search input{background:none;border:0;color:var(--text);font-family:var(--f-ui);font-size:13px;width:100%;outline:none}
+.search kbd{font-family:var(--f-mono);font-size:10px;border:1px solid var(--line);border-radius:4px;padding:1px 4px;color:var(--faint)}
+.pill{
+  display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--panel);
+  border-radius:999px;padding:5px 12px;font-family:var(--f-mono);font-size:11px;color:var(--dim);white-space:nowrap
+}
+.pill.crit{border-color:rgba(255,95,86,.4);background:rgba(255,95,86,.1);color:#FFB3AE}
+.view{padding:22px;max-width:1560px;width:100%;animation:in .3s ease both}
+@keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ---------- primitives ---------- */
+.led{width:9px;height:9px;border-radius:2px;background:var(--idle);display:inline-block;flex:none}
+.led.ok{background:var(--ok);box-shadow:0 0 7px rgba(52,199,123,.55)}
+.led.warn{background:var(--warn);box-shadow:0 0 7px rgba(242,179,61,.5)}
+.led.crit{background:var(--crit);box-shadow:0 0 8px rgba(255,95,86,.6);animation:blink 1.6s steps(1,end) infinite}
+.led.info{background:var(--info)}
+@keyframes blink{0%,60%{opacity:1}61%,100%{opacity:.28}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);position:relative}
+.card-h{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line)}
+.card-h h3{font-size:14px;font-weight:700}
+.card-h .sub{font-family:var(--f-mono);font-size:10.5px;color:var(--faint);letter-spacing:.05em}
+.card-h .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.card-b{padding:16px}
+.grid{display:grid;gap:14px}
+.eyebrow{font-family:var(--f-mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint)}
+.page-h{display:flex;align-items:flex-end;gap:16px;margin-bottom:18px;flex-wrap:wrap}
+.page-h h1{font-size:25px;font-weight:800}
+.page-h p{margin:4px 0 0;color:var(--dim);max-width:70ch}
+.page-h .right{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.btn{
+  display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--panel-2);
+  padding:7px 13px;border-radius:8px;font-size:13px;font-weight:500;color:var(--text);transition:.14s
+}
+.btn:hover{background:var(--panel-3);border-color:#2C5A75}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#0A161E;font-weight:600}
+.btn.primary:hover{background:var(--accent-2)}
+.btn.ghost{background:transparent}
+.btn.danger{border-color:rgba(255,95,86,.45);color:#FFB3AE;background:rgba(255,95,86,.09)}
+.btn.sm{padding:4px 9px;font-size:12px}
+select.btn{appearance:none;padding-right:26px;background-image:linear-gradient(45deg,transparent 50%,var(--dim) 50%),linear-gradient(135deg,var(--dim) 50%,transparent 50%);background-position:calc(100% - 14px) 52%,calc(100% - 9px) 52%;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+select option{background:#12242F;color:var(--text)}
+.tag{font-family:var(--f-mono);font-size:10px;letter-spacing:.05em;padding:2px 7px;border-radius:4px;background:var(--panel-2);color:var(--dim);border:1px solid var(--line);white-space:nowrap}
+.tag.ok{color:#8DE7B7;border-color:rgba(52,199,123,.35);background:rgba(52,199,123,.1)}
+.tag.warn{color:#FFD98A;border-color:rgba(242,179,61,.35);background:rgba(242,179,61,.1)}
+.tag.crit{color:#FFB3AE;border-color:rgba(255,95,86,.35);background:rgba(255,95,86,.1)}
+.tag.acc{color:var(--accent-2);border-color:rgba(124,140,255,.4);background:var(--accent-dim)}
+.mono{font-family:var(--f-mono)}
+.dim{color:var(--dim)} .faint{color:var(--faint)}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+hr.sep{border:0;border-top:1px solid var(--line);margin:16px 0}
+
+/* KPI */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:14px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 15px;position:relative;overflow:hidden}
+.kpi .lab{font-family:var(--f-mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--faint)}
+.kpi .val{font-family:var(--f-dis);font-weight:800;font-size:30px;letter-spacing:-.03em;line-height:1.15;margin-top:5px}
+.kpi .sub{font-size:12px;color:var(--dim);margin-top:2px}
+.kpi .spark{position:absolute;right:0;bottom:0;opacity:.55}
+
+/* tables */
+table{width:100%;border-collapse:collapse}
+th{
+  text-align:left;font-family:var(--f-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--faint);font-weight:500;padding:9px 14px;border-bottom:1px solid var(--line);white-space:nowrap
+}
+td{padding:10px 14px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+tbody tr:hover{background:rgba(255,255,255,.025)}
+tbody tr:last-child td{border-bottom:0}
+.tw{overflow-x:auto}
+.rowlink{cursor:pointer}
+
+/* faceplate (signature) */
+.faceplate{background:#08131A;border:1px solid var(--line);border-radius:8px;padding:14px;overflow-x:auto}
+.fp-rows{display:flex;flex-direction:column;gap:4px;min-width:max-content}
+.fp-row{display:flex;gap:4px}
+.fp-grp{display:flex;gap:4px;padding-right:9px;margin-right:5px;border-right:1px dashed #1C3646}
+.fp-grp:last-child{border-right:0}
+.port{
+  width:22px;height:19px;border-radius:3px;background:#12242F;border:1px solid #22404F;
+  display:grid;place-items:center;cursor:pointer;position:relative;transition:.12s
+}
+.port:hover{transform:translateY(-2px);border-color:var(--accent)}
+.port.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-dim)}
+.port i{width:7px;height:7px;border-radius:1.5px;background:var(--idle);display:block}
+.port.up i{background:var(--ok);box-shadow:0 0 6px rgba(52,199,123,.6)}
+.port.err i{background:var(--warn);box-shadow:0 0 6px rgba(242,179,61,.6)}
+.port.down i{background:var(--crit);box-shadow:0 0 6px rgba(255,95,86,.6)}
+.port.sfp{width:30px;background:#0E1E28}
+.fp-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-family:var(--f-mono);font-size:10.5px;color:var(--faint)}
+.fp-legend span{display:flex;align-items:center;gap:6px}
+
+/* site cards */
+.sites{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px}
+.site{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:15px;cursor:pointer;transition:.15s;position:relative;overflow:hidden}
+.site:hover{border-color:#2E5C77;transform:translateY(-2px)}
+.site::after{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:var(--ok)}
+.site.warn::after{background:var(--warn)} .site.crit::after{background:var(--crit)}
+.site .name{font-family:var(--f-dis);font-weight:700;font-size:16px}
+.site .meta{font-family:var(--f-mono);font-size:10.5px;color:var(--faint);letter-spacing:.05em}
+.ledstrip{display:flex;gap:3px;flex-wrap:wrap;margin:12px 0 10px}
+.ledstrip i{width:11px;height:11px;border-radius:2px;background:var(--idle)}
+.ledstrip i.ok{background:var(--ok)} .ledstrip i.warn{background:var(--warn)} .ledstrip i.crit{background:var(--crit)}
+.minirow{display:flex;gap:14px;font-size:12px;color:var(--dim);flex-wrap:wrap}
+.minirow b{color:var(--text);font-family:var(--f-mono);font-weight:500}
+
+/* bars / meters */
+.meter{height:6px;border-radius:4px;background:#0C1D27;overflow:hidden;border:1px solid var(--line)}
+.meter i{display:block;height:100%;background:var(--accent);border-radius:4px}
+.meter i.ok{background:var(--ok)} .meter i.warn{background:var(--warn)} .meter i.crit{background:var(--crit)}
+.mline{display:flex;align-items:center;gap:10px;margin:9px 0}
+.mline .l{width:112px;font-size:12px;color:var(--dim);flex:none}
+.mline .m{flex:1} .mline .v{width:74px;text-align:right;font-family:var(--f-mono);font-size:12px}
+
+/* alerts / feed */
+.feed{display:flex;flex-direction:column}
+.ev{display:flex;gap:12px;padding:11px 16px;border-bottom:1px solid var(--line-soft);align-items:flex-start}
+.ev:last-child{border-bottom:0}
+.ev .t{font-family:var(--f-mono);font-size:10.5px;color:var(--faint);white-space:nowrap;padding-top:2px}
+.ev .body{flex:1;min-width:0}
+.ev .title{font-size:13px;font-weight:500}
+.ev .sub{font-size:12px;color:var(--dim);margin-top:2px}
+.ev .act{display:flex;gap:6px;align-items:center}
+.corr{margin:8px 0 0;padding:8px 10px;border-left:2px solid var(--line);background:rgba(255,255,255,.02);border-radius:0 6px 6px 0;font-size:12px;color:var(--dim)}
+
+/* backup calendar */
+.cal{display:grid;grid-template-columns:repeat(30,1fr);gap:3px;min-width:420px}
+.cal i{aspect-ratio:1;border-radius:2px;background:var(--idle);cursor:pointer;transition:.12s}
+.cal i:hover{transform:scale(1.35);z-index:2}
+.cal i.ok{background:var(--ok)} .cal i.warn{background:var(--warn)} .cal i.crit{background:var(--crit)} .cal i.none{background:#1B2E3A}
+
+/* terminal */
+.term{background:#061117;border:1px solid var(--line);border-radius:0 0 var(--r) var(--r);padding:14px;font-family:var(--f-mono);font-size:12.5px;line-height:1.65;height:390px;overflow-y:auto}
+.term .p{color:var(--ok)} .term .c{color:var(--text)} .term .o{color:var(--dim);white-space:pre-wrap}
+.term-in{display:flex;gap:8px;align-items:center;margin-top:2px}
+.term-in input{flex:1;background:none;border:0;outline:none;color:var(--text);font-family:var(--f-mono);font-size:12.5px}
+.rec{display:inline-flex;align-items:center;gap:6px;color:#FFB3AE;font-family:var(--f-mono);font-size:10.5px}
+.rec i{width:7px;height:7px;border-radius:50%;background:var(--crit);animation:blink 1.4s infinite}
+
+/* topology */
+.topo{background:#08131A;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.topo svg{display:block;width:100%;height:auto}
+.node rect,.node circle{transition:.15s}
+.node:hover rect{stroke:var(--accent)}
+.link{stroke:#2A5064;stroke-width:1.6}
+.link.hot{stroke:var(--accent);stroke-width:2;stroke-dasharray:5 5;animation:flow 1s linear infinite}
+.link.down{stroke:var(--crit);stroke-dasharray:3 4}
+@keyframes flow{to{stroke-dashoffset:-20}}
+
+/* discovery console */
+.disc{background:#061117;border:1px solid var(--line);border-radius:8px;padding:14px;font-family:var(--f-mono);font-size:12px;height:250px;overflow-y:auto;line-height:1.7}
+.disc .l{display:flex;gap:9px}
+.disc .l b{color:var(--accent-2);font-weight:500}
+
+/* modal */
+.mask{position:fixed;inset:0;background:rgba(4,10,14,.72);backdrop-filter:blur(3px);z-index:80;display:grid;place-items:center;padding:20px;animation:in .18s ease both}
+.modal{background:var(--panel);border:1px solid var(--panel-3);border-radius:14px;width:min(560px,100%);max-height:88vh;overflow-y:auto;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+.modal .m-h{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+.modal .m-b{padding:18px}
+.modal .m-f{padding:14px 18px;border-top:1px solid var(--line);display:flex;gap:9px;justify-content:flex-end;background:rgba(0,0,0,.15)}
+.field{margin:12px 0}
+.field label{display:block;font-family:var(--f-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+.field input,.field select,.field textarea{
+  width:100%;background:#0A1B24;border:1px solid var(--line);border-radius:7px;padding:9px 11px;
+  color:var(--text);font-family:var(--f-mono);font-size:13px;outline:none
+}
+.field input:focus,.field select:focus{border-color:var(--accent)}
+.check{display:flex;gap:9px;align-items:flex-start;font-size:13px;color:var(--dim);margin:9px 0;cursor:pointer}
+.check input{margin-top:3px;accent-color:var(--accent)}
+.warnbox{border:1px solid rgba(242,179,61,.35);background:rgba(242,179,61,.08);border-radius:8px;padding:11px 13px;font-size:12.5px;color:#FFD98A}
+.critbox{border:1px solid rgba(255,95,86,.35);background:rgba(255,95,86,.08);border-radius:8px;padding:11px 13px;font-size:12.5px;color:#FFB3AE}
+.okbox{border:1px solid rgba(52,199,123,.3);background:rgba(52,199,123,.07);border-radius:8px;padding:11px 13px;font-size:12.5px;color:#8DE7B7}
+
+/* tabs */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:16px;overflow-x:auto}
+.tab{padding:8px 13px;border-radius:7px 7px 0 0;color:var(--dim);font-size:13px;white-space:nowrap;border-bottom:2px solid transparent}
+.tab.on{color:#fff;border-bottom-color:var(--accent);background:linear-gradient(180deg,transparent,var(--accent-dim))}
+
+/* misc layout helpers */
+.row{display:flex;gap:14px;flex-wrap:wrap}
+.between{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.c2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.c3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.c4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.split{grid-template-columns:minmax(0,1.55fr) minmax(0,1fr)}
+.split-r{grid-template-columns:minmax(0,1fr) minmax(0,1.7fr)}
+.phase2{display:inline-flex;align-items:center;gap:6px;font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;color:#0A161E;background:var(--accent);padding:3px 8px;border-radius:5px;font-weight:600}
+.toast{position:fixed;right:20px;bottom:20px;z-index:90;background:var(--panel-2);border:1px solid var(--panel-3);border-left:3px solid var(--ok);border-radius:10px;padding:12px 16px;box-shadow:0 16px 40px rgba(0,0,0,.5);animation:in .2s ease both;max-width:360px}
+.empty{padding:34px;text-align:center;color:var(--faint)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-family:var(--f-mono);font-size:10.5px;color:var(--faint)}
+.legend span{display:flex;align-items:center;gap:6px}
+
+@media (max-width:1180px){ .split,.split-r,.c4{grid-template-columns:1fr 1fr} .c3{grid-template-columns:1fr 1fr} }
+@media (max-width:880px){
+  .app{grid-template-columns:1fr}
+  .rail{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line)}
+  .nav{display:flex;gap:6px;overflow-x:auto;padding:10px}
+  .nav-group{display:none} .nav-item{width:auto;white-space:nowrap} .nav-item .k{display:none}
+  .rail-foot{display:none}
+  .split,.split-r,.c2,.c3,.c4{grid-template-columns:1fr}
+  .view{padding:16px}
+  .search{min-width:0}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="rail">
+    <div class="brand">
+      <div class="mark">@</div>
+      <div>
+        <b>arobase</b>
+        <small>supervision · v0.9</small>
+      </div>
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <div class="rail-foot">
+      <div class="avatar">JM</div>
+      <div style="min-width:0">
+        <div style="font-size:12.5px;font-weight:500">J. Marchand</div>
+        <div class="mono" style="font-size:10px;color:var(--faint)">Administrateur · 2FA</div>
+      </div>
+    </div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <div class="crumb" id="crumb"></div>
+      <div class="search">
+        <span class="mono" style="font-size:11px">⌕</span>
+        <input placeholder="Chercher un équipement, une IP, une MAC…" aria-label="Recherche">
+        <kbd>⌘K</kbd>
+      </div>
+      <div class="pill" id="agentPill"></div>
+      <div class="pill crit" id="alertPill"></div>
+    </header>
+    <main id="view" class="view"></main>
+  </div>
+</div>
+<div id="layer"></div>
+<script>
+/* ============================================================
+   arobase — maquette fonctionnelle (données simulées, déterministes)
+   ============================================================ */
+let seed = 42;
+const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+const pick = a => a[Math.floor(rnd() * a.length)];
+const ri = (a, b) => Math.floor(a + rnd() * (b - a + 1));
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ---------------- Sites ---------------- */
+const SITES = [
+  {id:'cae', nom:'Caen — Siège',      code:'CAE', core:'10.10.0.1',  lien:'Fibre 1 Gb/s', etat:'ok',   equip:34, srv:9, sw:7, alertes:0, agent:'connecté', latence:4,  dispo:99.98},
+  {id:'rou', nom:'Rouen — Usine',     code:'ROU', core:'10.20.0.1',  lien:'Fibre 500 Mb/s', etat:'crit', equip:41, srv:6, sw:11, alertes:3, agent:'connecté', latence:11, dispo:99.42},
+  {id:'lhv', nom:'Le Havre — Dépôt',  code:'LHV', core:'10.30.0.1',  lien:'SDSL 20 Mb/s', etat:'warn', equip:18, srv:3, sw:5,  alertes:2, agent:'connecté', latence:38, dispo:99.81},
+  {id:'ale', nom:'Alençon — Agence',  code:'ALE', code2:1, core:'10.40.0.1', lien:'Fibre 300 Mb/s', etat:'ok', equip:12, srv:2, sw:3, alertes:0, agent:'connecté', latence:9, dispo:100},
+  {id:'chb', nom:'Cherbourg — Atelier',code:'CHB',core:'10.50.0.1',  lien:'4G secours', etat:'warn', equip:15, srv:2, sw:4,  alertes:1, agent:'mode autonome', latence:126, dispo:98.9},
+  {id:'evx', nom:'Évreux — Agence',   code:'EVX', core:'10.60.0.1',  lien:'Fibre 300 Mb/s', etat:'ok', equip:11, srv:2, sw:3, alertes:0, agent:'connecté', latence:7, dispo:99.99},
+];
+SITES.forEach(s => {
+  s.leds = Array.from({length: s.equip}, () => {
+    const r = rnd();
+    if (s.etat === 'crit' && r > .9) return 'crit';
+    if (s.etat !== 'ok' && r > .84) return 'warn';
+    return r > .04 ? 'ok' : 'warn';
+  });
+  if (s.etat === 'crit') s.leds[3] = 'crit';
+});
+
+/* ---------------- Équipements ---------------- */
+const EQUIP = [
+  {id:'sw-cae-core', nom:'CAE-CORE-01', type:'Switch L3', marque:'Cisco', modele:'C9300-48P', ip:'10.10.0.1', site:'cae', fw:'17.09.04a', sn:'FCW2418L0GH', etat:'ok', ports:48, actifs:39, uptime:'412 j', cpu:22, mem:48, temp:41, role:'Cœur de réseau'},
+  {id:'sw-cae-e1', nom:'CAE-ETG1-SW02', type:'Switch L2', marque:'Cisco', modele:'C9200-24P', ip:'10.10.0.11', site:'cae', fw:'17.06.05', sn:'FCW2352A1BQ', etat:'ok', ports:24, actifs:19, uptime:'188 j', cpu:14, mem:37, temp:38},
+  {id:'sw-cae-e2', nom:'CAE-ETG2-SW03', type:'Switch L2', marque:'HPE Aruba', modele:'2930F-48G', ip:'10.10.0.12', site:'cae', fw:'WC.16.10.0021', sn:'SG08KL2P4R', etat:'warn', ports:48, actifs:31, uptime:'96 j', cpu:19, mem:44, temp:57, note:'Ventilateur 2 à 2 100 tr/min (seuil 2 500)'},
+  {id:'sw-rou-core', nom:'ROU-CORE-01', type:'Switch L3', marque:'Cisco', modele:'C9300-24P', ip:'10.20.0.1', site:'rou', fw:'16.12.04', sn:'FCW2301B7YU', etat:'crit', ports:24, actifs:22, uptime:'61 j', cpu:78, mem:71, temp:63, note:'Alimentation B en panne — plus de redondance'},
+  {id:'sw-rou-prod', nom:'ROU-PROD-SW04', type:'Switch L2', marque:'Cisco', modele:'IE-3300', ip:'10.20.0.14', site:'rou', fw:'17.03.05', sn:'FCW2299K3LM', etat:'warn', ports:24, actifs:20, uptime:'23 j', cpu:31, mem:52, temp:59, note:'CRC errors en hausse sur Gi1/0/12'},
+  {id:'sw-lhv-core', nom:'LHV-CORE-01', type:'Switch L3', marque:'HPE Aruba', modele:'6100-48G', ip:'10.30.0.1', site:'lhv', fw:'PL.10.09.0010', sn:'SG10PQ8T2W', etat:'ok', ports:48, actifs:26, uptime:'271 j', cpu:11, mem:33, temp:44},
+  {id:'sw-chb-core', nom:'CHB-CORE-01', type:'Switch L3', marque:'Cisco', modele:'C1000-24P', ip:'10.50.0.1', site:'chb', fw:'15.2(7)E5', sn:'FOC2145X0AB', etat:'warn', ports:24, actifs:17, uptime:'9 j', cpu:26, mem:41, temp:52, note:'Firmware obsolète — CVE-2023-20198'},
+  {id:'srv-cae-esx1', nom:'CAE-ESX-01', type:'Hyperviseur', marque:'Dell', modele:'PowerEdge R650', ip:'10.10.1.21', site:'cae', fw:'iDRAC 6.10.80', sn:'JH42XN3', etat:'ok', os:'VMware ESXi 8.0U2', cpu:46, mem:68, temp:52, uptime:'201 j', vm:14},
+  {id:'srv-cae-esx2', nom:'CAE-ESX-02', type:'Hyperviseur', marque:'Dell', modele:'PowerEdge R650', ip:'10.10.1.22', site:'cae', fw:'iDRAC 6.10.80', sn:'JH42XP1', etat:'ok', os:'VMware ESXi 8.0U2', cpu:39, mem:61, temp:50, uptime:'201 j', vm:12},
+  {id:'srv-cae-fs', nom:'CAE-FS-01', type:'Serveur', marque:'Dell', modele:'PowerEdge R550', ip:'10.10.1.31', site:'cae', fw:'iDRAC 6.10.30', sn:'JK71LM2', etat:'warn', os:'Windows Server 2022', cpu:24, mem:77, temp:48, uptime:'44 j', note:'Volume D: à 91 % — 380 Go libres'},
+  {id:'srv-rou-app', nom:'ROU-APP-01', type:'Serveur', marque:'HPE', modele:'ProLiant DL360 G10', ip:'10.20.1.10', site:'rou', fw:'iLO 2.78', sn:'CZ2043JK9P', etat:'crit', os:'Rocky Linux 9.3', cpu:91, mem:88, temp:71, uptime:'12 j', note:'RAID 5 dégradé — disque 3 en panne'},
+  {id:'srv-rou-db', nom:'ROU-DB-01', type:'Serveur', marque:'HPE', modele:'ProLiant DL380 G10', ip:'10.20.1.11', site:'rou', fw:'iLO 2.78', sn:'CZ2043JL0Q', etat:'ok', os:'Debian 12', cpu:52, mem:64, temp:55, uptime:'318 j'},
+  {id:'srv-lhv-nas', nom:'LHV-NAS-01', type:'Stockage', marque:'Synology', modele:'RS3621xs+', ip:'10.30.1.5', site:'lhv', fw:'DSM 7.2.1', sn:'2140RCN5K', etat:'ok', os:'DSM 7.2.1', cpu:18, mem:42, temp:39, uptime:'503 j'},
+  {id:'srv-chb-ad', nom:'CHB-AD-01', type:'Serveur', marque:'Dell', modele:'PowerEdge T350', ip:'10.50.1.10', site:'chb', fw:'iDRAC 6.00.30', sn:'JQ88RT5', etat:'ok', os:'Windows Server 2019', cpu:17, mem:55, temp:44, uptime:'129 j'},
+  {id:'new-rou-x', nom:'—  inconnu  —', type:'Équipement non répertorié', marque:'TP-Link', modele:'TL-SG108', ip:'10.20.4.87', site:'rou', fw:'?', sn:'?', etat:'crit', uptime:'2 h', rogue:true, note:'Détecté sur ROU-PROD-SW04 port Gi1/0/18 — non déclaré à l\'inventaire'},
+];
+const eqById = id => EQUIP.find(e => e.id === id);
+const siteById = id => SITES.find(s => s.id === id);
+
+/* ---------------- Ports du switch de démo ---------------- */
+const PORTS = Array.from({length: 48}, (_, i) => {
+  const n = i + 1;
+  const r = rnd();
+  const st = n === 12 ? 'err' : n === 18 ? 'down' : r > .22 ? 'up' : 'free';
+  return {
+    n, nom: 'Gi1/0/' + n, etat: st,
+    vitesse: st === 'free' ? '—' : (n <= 4 ? '10 Gb/s' : '1 Gb/s'),
+    duplex: st === 'free' ? '—' : 'Full',
+    vlan: st === 'free' ? '—' : pick([10, 20, 30, 40, 99]),
+    desc: st === 'free' ? 'libre' : pick(['Poste bureau', 'Borne WiFi', 'Imprimante', 'Caméra IP', 'Serveur', 'Uplink étage']),
+    mac: st === 'free' ? '—' : ['00:1B', '44', pick(['11','2A','C4']), pick(['3F','8B','D1']), pick(['A2','77','19']), pick(['0C','E5','B3'])].join(':'),
+    inMb: st === 'free' ? 0 : +(rnd() * 240).toFixed(1),
+    outMb: st === 'free' ? 0 : +(rnd() * 180).toFixed(1),
+    crc: n === 12 ? 1842 : (st === 'up' ? ri(0, 3) : 0),
+    stp: st === 'free' ? '—' : (n === 1 ? 'Root / Forwarding' : 'Designated / Forwarding'),
+    poe: st === 'free' ? 0 : +(rnd() * 22).toFixed(1),
+    voisin: n === 1 ? 'CAE-CORE-01 · Te1/1/1 (LLDP)' : (n === 24 ? 'CAE-ETG2-SW03 · Gi1/0/48 (CDP)' : '—'),
+  };
+});
+
+/* ---------------- Alertes ---------------- */
+const ALERTES = [
+  {id:'a1', sev:'crit', t:'14:02', site:'rou', eq:'ROU-CORE-01', titre:'Alimentation B en panne', det:'PSU2 : absence de tension. Redondance perdue depuis 47 min.', ack:false, esc:'Escalade N2 dans 13 min', regle:'PSU redondante — état ≠ ok'},
+  {id:'a2', sev:'crit', t:'13:48', site:'rou', eq:'ROU-APP-01', titre:'Grappe RAID 5 dégradée', det:'Disque 3 (bay 2) en panne. Reconstruction non démarrée — pas de disque de secours.', ack:false, esc:'Escaladé à N2 (A. Bertin)', regle:'Statut RAID ≠ optimal'},
+  {id:'a3', sev:'crit', t:'13:48', site:'rou', eq:'ROU-APP-01', titre:'Sauvegarde échouée', det:'Job « ROU-APP-01 quotidien » : échec sur erreur I/O.', ack:true, esc:'Acquittée par S. Lemoine', regle:'Job de sauvegarde en échec', lien:'a2'},
+  {id:'a4', sev:'warn', t:'11:20', site:'lhv', eq:'LHV-CORE-01', titre:'Bande passante WAN saturée', det:'Lien SDSL à 94 % pendant 20 min (seuil 85 %).', ack:false, esc:'—', regle:'Trafic WAN > 85 % pendant 15 min'},
+  {id:'a5', sev:'warn', t:'10:07', site:'rou', eq:'ROU-PROD-SW04', titre:'Erreurs CRC en hausse', det:'Gi1/0/12 : 1 842 CRC errors en 1 h (seuil 100/h). Câble ou SFP suspect.', ack:false, esc:'—', regle:'CRC errors > 100/h'},
+  {id:'a6', sev:'crit', t:'09:52', site:'rou', eq:'—', titre:'Équipement non répertorié détecté', det:'Switch TP-Link non déclaré (10.20.4.87) branché sur ROU-PROD-SW04 · Gi1/0/18.', ack:false, esc:'Notification RSSI envoyée', regle:'Rogue device'},
+  {id:'a7', sev:'warn', t:'08:31', site:'chb', eq:'CHB-CORE-01', titre:'Firmware obsolète', det:'IOS 15.2(7)E5 — CVE-2023-20198 (score 10.0). Correctif : 15.2(7)E10.', ack:true, esc:'Planifié fenêtre du 09/08', regle:'Version firmware avec faille connue'},
+  {id:'a8', sev:'warn', t:'07:14', site:'cae', eq:'CAE-FS-01', titre:'Espace disque faible', det:'Volume D: à 91 % (seuil 90 %). 380 Go libres, tendance −12 Go/j.', ack:false, esc:'—', regle:'Disque > 90 %'},
+  {id:'a9', sev:'info', t:'06:00', site:'cae', eq:'—', titre:'Découverte terminée', det:'3 nouveaux ports actifs, 1 changement de topologie enregistré.', ack:true, esc:'—', regle:'Cycle de découverte'},
+  {id:'a10', sev:'warn', t:'02:15', site:'chb', eq:'CHB-CORE-01', titre:'Liaison centrale coupée', det:'Bascule en mode autonome. Agent local en tampon — 4 210 métriques en attente.', ack:true, esc:'Auto-résolue à 02:41', regle:'Perte de liaison site → central'},
+];
+
+/* ---------------- Sauvegardes ---------------- */
+const BACKUPS = [
+  {machine:'CAE-ESX-01 (14 VM)', site:'cae', outil:'Veeam B&R 12', statut:'ok', derniere:'02/08 01:12', duree:'1 h 42', taille:'2,41 To', taux:100, retention:'14/14', politique:'Quotidien 01:00 · GFS 4/12', dernierEchec:'—'},
+  {machine:'CAE-ESX-02 (12 VM)', site:'cae', outil:'Veeam B&R 12', statut:'ok', derniere:'02/08 03:04', duree:'1 h 18', taille:'1,88 To', taux:98, retention:'14/14', politique:'Quotidien 01:00 · GFS 4/12', dernierEchec:'21/07'},
+  {machine:'CAE-FS-01', site:'cae', outil:'Veeam Agent', statut:'ok', derniere:'02/08 02:31', duree:'46 min', taille:'910 Go', taux:100, retention:'30/30', politique:'Quotidien 02:00', dernierEchec:'—'},
+  {machine:'ROU-APP-01', site:'rou', outil:'Veeam Agent', statut:'crit', derniere:'30/07 02:14', duree:'—', taille:'—', taux:71, retention:'8/30', politique:'Quotidien 02:00', dernierEchec:'02/08 (I/O error)'},
+  {machine:'ROU-DB-01', site:'rou', outil:'Veeam B&R 12', statut:'warn', derniere:'02/08 02:58', duree:'2 h 51', taille:'640 Go', taux:94, retention:'27/30', politique:'Quotidien 02:00 + log 15 min', dernierEchec:'28/07'},
+  {machine:'LHV-NAS-01', site:'lhv', outil:'Hyper Backup', statut:'ok', derniere:'02/08 04:20', duree:'3 h 05', taille:'4,10 To', taux:99, retention:'12/12', politique:'Quotidien 01:30', dernierEchec:'—'},
+  {machine:'CHB-AD-01', site:'chb', outil:'Windows Server Backup', statut:'warn', derniere:'29/07 23:40', duree:'22 min', taille:'118 Go', taux:88, retention:'6/14', politique:'Quotidien 23:00', dernierEchec:'01/08 (agent hors ligne)'},
+  {machine:'EVX-SRV-01', site:'evx', outil:'—', statut:'none', derniere:'jamais', duree:'—', taille:'—', taux:0, retention:'0', politique:'Aucune politique', dernierEchec:'—'},
+];
+const calFor = statut => Array.from({length: 30}, (_, i) => {
+  const r = rnd();
+  if (statut === 'none') return 'none';
+  if (statut === 'crit') return i > 26 ? 'crit' : (r > .88 ? 'warn' : 'ok');
+  if (statut === 'warn') return r > .82 ? (r > .93 ? 'crit' : 'warn') : 'ok';
+  return r > .96 ? 'warn' : 'ok';
+});
+BACKUPS.forEach(b => b.cal = calFor(b.statut));
+
+/* ---------------- IA ---------------- */
+const IA = [
+  {sev:'crit', titre:'Panne de ventilateur probable sous 6 jours', cible:'CAE-ETG2-SW03 · Ventilateur 2',
+   det:'La vitesse baisse de façon régulière depuis 18 jours (2 480 → 2 100 tr/min) et la température du châssis suit la même pente. Le comportement correspond à 3 pannes de ventilateur déjà observées sur ce modèle.',
+   conf:87, action:'Commander un ventilateur de rechange et planifier le remplacement en fenêtre de maintenance.', auto:false, base:'18 j de métriques · modèle de dérive'},
+  {sev:'crit', titre:'Volume D: saturé sous 31 jours', cible:'CAE-FS-01 · Volume D:',
+   det:'Croissance stable de 12 Go/jour depuis 60 jours, sans purge. À ce rythme, saturation le 02/09.',
+   conf:94, action:'Étendre le volume de 1 To ou activer la purge des dossiers de dépôt.', auto:true, autoLabel:'Lancer le script de purge des dépôts > 90 j', base:'60 j · régression linéaire'},
+  {sev:'warn', titre:'Sauvegarde anormalement petite', cible:'ROU-DB-01 · point du 28/07',
+   det:'640 Go contre 1,15 To en moyenne sur les 20 points précédents (−44 %). Un point de sauvegarde valide en apparence peut être incomplet.',
+   conf:78, action:'Vérifier le périmètre du job et lancer un test de restauration.', auto:true, autoLabel:'Programmer un test de restauration', base:'20 derniers points'},
+  {sev:'warn', titre:'Trafic inhabituel la nuit', cible:'LHV-CORE-01 · Gi1/0/7',
+   det:'Pics de 180 Mb/s sortants entre 01:00 et 04:00 depuis 4 nuits. Aucune tâche planifiée connue sur ce port.',
+   conf:69, action:'Identifier le poste derrière la MAC 00:1B:44:C4:8B:19 et vérifier l\'usage.', auto:false, base:'baseline 30 j · écart-type ×4'},
+  {sev:'info', titre:'CPU du cœur au-dessus de la normale', cible:'ROU-CORE-01',
+   det:'78 % contre 24 % en moyenne. Corrélé à la panne d\'alimentation : le second module compense.',
+   conf:82, action:'Traiter d\'abord l\'alerte alimentation ; la charge devrait redescendre.', auto:false, base:'corrélation multi-métriques'},
+];
+const REMED = [
+  {t:'02/08 13:49', txt:'Relance automatique du job « ROU-DB-01 quotidien » après échec réseau', res:'Réussi', ok:true},
+  {t:'01/08 22:10', txt:'Redémarrage du service « spooler » sur CAE-FS-01 (process arrêté)', res:'Réussi', ok:true},
+  {t:'01/08 03:22', txt:'Purge du cache /var/log sur ROU-APP-01 (disque > 95 %)', res:'Réussi — 18 Go libérés', ok:true},
+  {t:'31/07 19:04', txt:'Relance du job « CHB-AD-01 quotidien »', res:'Échec — agent injoignable, transmis au technicien', ok:false},
+];
+
+/* ---------------- Utilisateurs / audit ---------------- */
+const USERS = [
+  {n:'J. Marchand', r:'Administrateur', mail:'j.marchand@exemple.fr', tfa:true, sites:'Tous', cli:true, resto:true, last:'02/08 14:06'},
+  {n:'A. Bertin', r:'Technicien N2', mail:'a.bertin@exemple.fr', tfa:true, sites:'Tous', cli:true, resto:true, last:'02/08 13:51'},
+  {n:'S. Lemoine', r:'Technicien N1', mail:'s.lemoine@exemple.fr', tfa:true, sites:'CAE, ROU', cli:true, resto:false, last:'02/08 13:48'},
+  {n:'C. Duval', r:'Technicien N1', mail:'c.duval@exemple.fr', tfa:false, sites:'LHV, CHB', cli:false, resto:false, last:'01/08 17:20'},
+  {n:'M. Rousseau', r:'Lecture seule', mail:'m.rousseau@exemple.fr', tfa:true, sites:'Tous', cli:false, resto:false, last:'02/08 09:12'},
+  {n:'svc-itsm', r:'API (jeton)', mail:'—', tfa:false, sites:'Tous', cli:false, resto:false, last:'02/08 14:05'},
+];
+const AUDIT = [
+  {t:'02/08 14:06', u:'J. Marchand', a:'Connexion CLI', c:'ROU-CORE-01 · SSH · session 00:04:12 · enregistrée'},
+  {t:'02/08 13:52', u:'A. Bertin', a:'Acquittement d\'alerte', c:'RAID dégradé — ROU-APP-01'},
+  {t:'02/08 13:40', u:'svc-itsm', a:'Appel API', c:'GET /api/v1/alerts?severity=critical (ticket #4821 créé)'},
+  {t:'02/08 11:02', u:'S. Lemoine', a:'Fenêtre de maintenance', c:'LHV — 03/08 20:00→23:00 — alertes suspendues'},
+  {t:'02/08 09:30', u:'J. Marchand', a:'Lecture de credential', c:'Coffre-fort · compte « admin-switchs » · usage bastion'},
+  {t:'01/08 16:44', u:'A. Bertin', a:'Restauration', c:'CAE-FS-01 · point du 31/07 02:31 · dossier \\Compta — validée par J. Marchand'},
+  {t:'01/08 10:15', u:'J. Marchand', a:'Modification de rôle', c:'C. Duval : accès CLI retiré'},
+];
+
+/* ---------------- Helpers graphiques ---------------- */
+function serie(n, base, amp, trend = 0) {
+  const out = []; let v = base;
+  for (let i = 0; i < n; i++) { v += (rnd() - .5) * amp + trend; out.push(Math.max(0, v)); }
+  return out;
+}
+function sparkline(vals, w = 120, h = 34, color = 'var(--accent)', fill = true) {
+  const mx = Math.max(...vals), mn = Math.min(...vals), sp = mx - mn || 1;
+  const pts = vals.map((v, i) => [i / (vals.length - 1) * w, h - 2 - ((v - mn) / sp) * (h - 6)]);
+  const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+  const area = d + ` L${w} ${h} L0 ${h} Z`;
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">
+    ${fill ? `<path d="${area}" fill="${color}" opacity=".12"/>` : ''}
+    <path d="${d}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+}
+function areaChart(series, w = 640, h = 170, labels = []) {
+  const all = series.flatMap(s => s.v), mx = Math.max(...all) * 1.12, mn = 0;
+  const x = i => 34 + i / (series[0].v.length - 1) * (w - 46);
+  const y = v => h - 26 - (v - mn) / (mx - mn || 1) * (h - 40);
+  let grid = '';
+  for (let g = 0; g <= 4; g++) {
+    const gy = 14 + g * (h - 40) / 4, val = (mx - g * mx / 4);
+    grid += `<line x1="34" y1="${gy}" x2="${w - 8}" y2="${gy}" stroke="var(--line)" stroke-width="1"/>
+      <text x="28" y="${gy + 3.5}" text-anchor="end" fill="var(--faint)" font-size="9" font-family="IBM Plex Mono">${val >= 100 ? Math.round(val) : val.toFixed(0)}</text>`;
+  }
+  const paths = series.map(s => {
+    const d = s.v.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1)).join(' ');
+    return `<path d="${d} L${x(s.v.length - 1)} ${h - 26} L${x(0)} ${h - 26} Z" fill="${s.c}" opacity=".10"/>
+            <path d="${d}" fill="none" stroke="${s.c}" stroke-width="1.8" stroke-linejoin="round"/>`;
+  }).join('');
+  const xl = labels.map((l, i) => `<text x="${x(i * (series[0].v.length - 1) / (labels.length - 1))}" y="${h - 8}" text-anchor="middle" fill="var(--faint)" font-size="9" font-family="IBM Plex Mono">${l}</text>`).join('');
+  const leg = series.map((s, i) => `<g transform="translate(${44 + i * 118},${h - 8})"><rect x="0" y="-7" width="8" height="8" rx="2" fill="${s.c}"/><text x="13" y="0" fill="var(--dim)" font-size="10" font-family="IBM Plex Mono">${s.n}</text></g>`).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" style="display:block">${grid}${paths}${labels.length ? xl : leg}</svg>`;
+}
+function meter(label, val, unit = '%', th = [70, 90]) {
+  const cls = val >= th[1] ? 'crit' : val >= th[0] ? 'warn' : 'ok';
+  return `<div class="mline"><div class="l">${label}</div><div class="m"><div class="meter"><i class="${cls}" style="width:${Math.min(100, val)}%"></i></div></div><div class="v">${val}${unit}</div></div>`;
+}
+const HOURS = ['00h','04h','08h','12h','16h','20h','24h'];
+
+/* ============================================================
+   Navigation
+   ============================================================ */
+const NAV = [
+  {g:'Supervision', items:[
+    {id:'overview', l:'Vue globale', s:'crit', k:'§6'},
+    {id:'site', l:'Vue par site', s:'crit', k:'§6'},
+    {id:'topo', l:'Carte réseau', s:'ok', k:'§1'},
+    {id:'inv', l:'Inventaire & découverte', s:'warn', k:'§1'},
+  ]},
+  {g:'Fiches équipement', items:[
+    {id:'switch', l:'Switch L2/L3', s:'warn', k:'§2'},
+    {id:'server', l:'Serveur / hyperviseur', s:'crit', k:'§3'},
+  ]},
+  {g:'Exploitation', items:[
+    {id:'backup', l:'Sauvegardes', s:'crit', k:'§4·13'},
+    {id:'alerts', l:'Alertes', s:'crit', k:'§5'},
+    {id:'cli', l:'Console CLI (bastion)', s:'ok', k:'§12'},
+  ]},
+  {g:'Intelligence', items:[
+    {id:'ia', l:'Analyse IA & remédiation', s:'warn', k:'§9'},
+  ]},
+  {g:'Pilotage', items:[
+    {id:'reports', l:'Rapports', s:'ok', k:'§6'},
+    {id:'admin', l:'Administration', s:'ok', k:'§7·8'},
+  ]},
+];
+let CUR = 'overview';
+let CUR_SITE = 'rou';
+
+function renderNav() {
+  document.getElementById('nav').innerHTML = NAV.map(g =>
+    `<div class="nav-group">${g.g}</div>` + g.items.map(i =>
+      `<button class="nav-item ${i.id === CUR ? 'on' : ''}" data-go="${i.id}">
+         <span class="led ${i.s}"></span><span>${i.l}</span><span class="k">${i.k}</span>
+       </button>`).join('')).join('');
+}
+const CRUMBS = {
+  overview:'Supervision / Vue globale', site:'Supervision / Vue par site', topo:'Supervision / Carte réseau',
+  inv:'Inventaire / Équipements découverts', switch:'Équipement / Switch', server:'Équipement / Serveur',
+  backup:'Exploitation / Sauvegardes', alerts:'Exploitation / Alertes', cli:'Exploitation / Console CLI',
+  ia:'Intelligence / Anomalies', reports:'Pilotage / Rapports', admin:'Administration / Plateforme',
+};
+function go(id) { CUR = id; renderNav(); render(); window.scrollTo({top:0}); }
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-go]'); if (b) { go(b.dataset.go); }
+});
+
+/* ============================================================
+   1 — Vue globale multi-sites
+   ============================================================ */
+function vOverview() {
+  const nCrit = ALERTES.filter(a => a.sev === 'crit' && !a.ack).length;
+  const nWarn = ALERTES.filter(a => a.sev === 'warn' && !a.ack).length;
+  const bkOk = BACKUPS.filter(b => b.statut === 'ok').length;
+  return `
+  <div class="page-h">
+    <div>
+      <div class="eyebrow">02 août 2026 · 14:11 · rafraîchi il y a 12 s</div>
+      <h1>Vue globale</h1>
+      <p>L'état des 6 sites en un coup d'œil : réseau, serveurs, sauvegardes et alertes. Chaque carré représente un équipement supervisé.</p>
+    </div>
+    <div class="right">
+      <button class="btn ghost" data-modal="maint">Fenêtre de maintenance</button>
+      <button class="btn primary" data-modal="discover">+ Ajouter un site</button>
+    </div>
+  </div>
+
+  <div class="kpis" style="margin-bottom:16px">
+    <div class="kpi"><div class="lab">Sites</div><div class="val">6</div><div class="sub">131 équipements supervisés</div>${sparkline(serie(20,120,4,.6),110,34,'var(--accent)')}</div>
+    <div class="kpi"><div class="lab">Disponibilité 30 j</div><div class="val">99,68 %</div><div class="sub">objectif SLA 99,5 %</div>${sparkline(serie(20,99.7,.3),110,34,'var(--ok)')}</div>
+    <div class="kpi"><div class="lab">Alertes ouvertes</div><div class="val" style="color:var(--crit)">${nCrit + nWarn}</div><div class="sub">${nCrit} critiques · ${nWarn} avertissements</div>${sparkline(serie(20,4,3),110,34,'var(--crit)')}</div>
+    <div class="kpi"><div class="lab">Sauvegardes 24 h</div><div class="val">${bkOk}/${BACKUPS.length}</div><div class="sub">1 échec · 1 machine non couverte</div>${sparkline(serie(20,90,8),110,34,'var(--warn)')}</div>
+    <div class="kpi"><div class="lab">Ports actifs</div><div class="val">612</div><div class="sub">sur 984 — 38 % disponibles</div>${sparkline(serie(20,600,20,1),110,34,'var(--info)')}</div>
+  </div>
+
+  <div class="grid split">
+    <section>
+      <div class="between" style="margin-bottom:11px">
+        <h2 style="font-size:15px">Sites</h2>
+        <div class="legend"><span><i class="led ok"></i>opérationnel</span><span><i class="led warn"></i>dégradé</span><span><i class="led crit"></i>incident</span><span><i class="led"></i>hors gestion</span></div>
+      </div>
+      <div class="sites">
+        ${SITES.map(s => `
+          <article class="site ${s.etat}" data-site="${s.id}" tabindex="0">
+            <div class="between">
+              <div>
+                <div class="name">${s.nom}</div>
+                <div class="meta">${s.code} · cœur ${s.core}</div>
+              </div>
+              <span class="tag ${s.etat === 'ok' ? 'ok' : s.etat}">${s.alertes ? s.alertes + ' alerte' + (s.alertes > 1 ? 's' : '') : 'RAS'}</span>
+            </div>
+            <div class="ledstrip">${s.leds.map(l => `<i class="${l}"></i>`).join('')}</div>
+            <div class="minirow">
+              <span>Switches <b>${s.sw}</b></span><span>Serveurs <b>${s.srv}</b></span>
+              <span>Dispo <b>${s.dispo} %</b></span><span>Latence <b>${s.latence} ms</b></span>
+            </div>
+            <div class="minirow" style="margin-top:9px;padding-top:9px;border-top:1px solid var(--line-soft)">
+              <span class="mono" style="font-size:11px;color:${s.agent === 'connecté' ? 'var(--ok)' : 'var(--warn)'}">● agent ${s.agent}</span>
+              <span class="mono" style="font-size:11px;color:var(--faint)">${s.lien}</span>
+            </div>
+          </article>`).join('')}
+      </div>
+    </section>
+
+    <aside>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-h"><span class="led crit"></span><h3>Alertes en cours</h3>
+          <div class="right"><button class="btn sm ghost" data-go="alerts">Tout voir</button></div></div>
+        <div class="feed">
+          ${ALERTES.filter(a => !a.ack).slice(0, 5).map(a => `
+            <div class="ev">
+              <div class="t">${a.t}</div>
+              <div class="body">
+                <div class="title">${a.titre}</div>
+                <div class="sub">${siteById(a.site).code} · ${a.eq}</div>
+              </div>
+              <div class="act"><span class="tag ${a.sev}">${a.sev === 'crit' ? 'critique' : 'warning'}</span></div>
+            </div>`).join('')}
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><span class="phase2">IA</span><h3>Ce que l'analyse a repéré</h3>
+          <div class="right"><button class="btn sm ghost" data-go="ia">Détail</button></div></div>
+        <div class="feed">
+          ${IA.slice(0, 3).map(i => `
+            <div class="ev">
+              <div class="body">
+                <div class="title">${i.titre}</div>
+                <div class="sub">${i.cible}</div>
+              </div>
+              <div class="act mono" style="font-size:11px;color:var(--accent-2)">${i.conf} %</div>
+            </div>`).join('')}
+        </div>
+      </div>
+    </aside>
+  </div>`;
+}
+
+/* ============================================================
+   2 — Vue par site
+   ============================================================ */
+function vSite() {
+  const s = siteById(CUR_SITE);
+  const eq = EQUIP.filter(e => e.site === s.id);
+  const al = ALERTES.filter(a => a.site === s.id);
+  const bk = BACKUPS.filter(b => b.site === s.id);
+  return `
+  <div class="page-h">
+    <div>
+      <div class="eyebrow">Site ${s.code}</div>
+      <h1>${s.nom}</h1>
+      <p>Cœur de réseau ${s.core} · ${s.lien} · agent local ${s.agent} · latence ${s.latence} ms</p>
+    </div>
+    <div class="right">
+      <select class="btn" id="siteSel" style="padding-right:9px">
+        ${SITES.map(x => `<option value="${x.id}" ${x.id === s.id ? 'selected' : ''}>${x.nom}</option>`).join('')}
+      </select>
+      <button class="btn" data-go="topo">Carte du site</button>
+      <button class="btn ghost" data-modal="maint">Maintenance</button>
+    </div>
+  </div>
+
+  <div class="kpis" style="margin-bottom:16px">
+    <div class="kpi"><div class="lab">Équipements</div><div class="val">${s.equip}</div><div class="sub">${s.sw} switches · ${s.srv} serveurs</div></div>
+    <div class="kpi"><div class="lab">Disponibilité 30 j</div><div class="val">${s.dispo} %</div><div class="sub">${s.etat === 'ok' ? 'aucun incident' : 'incident en cours'}</div></div>
+    <div class="kpi"><div class="lab">Alertes</div><div class="val" style="color:${s.alertes ? 'var(--crit)' : 'var(--ok)'}">${s.alertes}</div><div class="sub">${al.filter(a => a.ack).length} acquittées</div></div>
+    <div class="kpi"><div class="lab">Sauvegardes</div><div class="val">${bk.filter(b => b.statut === 'ok').length}/${bk.length}</div><div class="sub">dernière nuit</div></div>
+    <div class="kpi"><div class="lab">Ports utilisés</div><div class="val">${Math.round(s.equip * 3.1)}</div><div class="sub">sur ${s.sw * 42} — capacity planning</div></div>
+  </div>
+
+  <div class="grid split" style="margin-bottom:14px">
+    <div class="card">
+      <div class="card-h"><h3>Équipements du site</h3><span class="sub">SNMP v3 · sondage 60 s</span>
+        <div class="right"><button class="btn sm ghost" data-go="inv">Inventaire complet</button></div></div>
+      <div class="tw"><table>
+        <thead><tr><th></th><th>Nom</th><th>Type</th><th>Adresse IP</th><th>Modèle</th><th>CPU</th><th>Mém.</th><th>Temp.</th><th>Uptime</th><th></th></tr></thead>
+        <tbody>${eq.map(e => `
+          <tr class="rowlink" data-eq="${e.id}">
+            <td><span class="led ${e.etat}"></span></td>
+            <td><b>${e.nom}</b>${e.note ? `<div class="sub faint" style="font-size:11px">${esc(e.note)}</div>` : ''}</td>
+            <td class="dim">${e.type}</td>
+            <td class="num dim">${e.ip}</td>
+            <td class="dim">${e.marque} ${e.modele}</td>
+            <td class="num">${e.cpu ?? '—'}${e.cpu ? ' %' : ''}</td>
+            <td class="num">${e.mem ?? '—'}${e.mem ? ' %' : ''}</td>
+            <td class="num" style="color:${e.temp > 60 ? 'var(--crit)' : e.temp > 55 ? 'var(--warn)' : 'inherit'}">${e.temp ?? '—'}${e.temp ? ' °C' : ''}</td>
+            <td class="num dim">${e.uptime}</td>
+            <td><button class="btn sm ghost" data-cli="${e.nom}">CLI</button></td>
+          </tr>`).join('')}</tbody></table></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Trafic du lien WAN</h3><span class="sub">24 h · ${s.lien}</span></div>
+      <div class="card-b">
+        ${areaChart([
+          {n:'Descendant', c:'var(--accent)', v:serie(48, 40, 30)},
+          {n:'Montant', c:'var(--info)', v:serie(48, 22, 18)},
+        ], 560, 190, HOURS)}
+        <hr class="sep">
+        ${meter('Charge du lien', 62, ' %')}
+        ${meter('Latence vers central', s.latence, ' ms', [40, 100])}
+        ${meter('Perte de paquets', 0.2, ' %', [1, 3])}
+      </div>
+    </div>
+  </div>
+
+  <div class="grid split-r">
+    <div class="card">
+      <div class="card-h"><h3>Sauvegardes du site</h3></div>
+      <div class="tw"><table><thead><tr><th></th><th>Machine</th><th>Dernière réussie</th><th>Taux</th></tr></thead>
+      <tbody>${bk.length ? bk.map(b => `<tr><td><span class="led ${b.statut === 'none' ? '' : b.statut}"></span></td><td>${b.machine}</td><td class="num dim">${b.derniere}</td><td class="num">${b.taux} %</td></tr>`).join('') : '<tr><td colspan="4" class="empty">Aucune machine sauvegardée sur ce site.</td></tr>'}</tbody></table></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Historique des alertes du site</h3></div>
+      <div class="feed">${al.length ? al.map(a => `
+        <div class="ev">
+          <div class="t">${a.t}</div>
+          <div class="body"><div class="title">${a.titre}</div><div class="sub">${a.eq} · ${a.det}</div></div>
+          <div class="act">${a.ack ? '<span class="tag">acquittée</span>' : `<span class="tag ${a.sev}">${a.sev}</span>`}</div>
+        </div>`).join('') : '<div class="empty">Aucune alerte sur les 7 derniers jours.</div>'}</div>
+    </div>
+  </div>`;
+}
+
+/* ============================================================
+   3 — Carte réseau (topologie)
+   ============================================================ */
+function vTopo() {
+  const N = [
+    {x:430,y:40,w:150,h:44,l:'CAE-CORE-01',s:'Cisco C9300 · L3',st:'ok',id:'sw-cae-core'},
+    {x:190,y:150,w:140,h:40,l:'CAE-ETG1-SW02',s:'24 ports · 19 actifs',st:'ok',id:'sw-cae-e1'},
+    {x:400,y:150,w:140,h:40,l:'CAE-ETG2-SW03',s:'48 ports · 31 actifs',st:'warn',id:'sw-cae-e2'},
+    {x:610,y:150,w:140,h:40,l:'CAE-DMZ-SW05',s:'8 ports · 5 actifs',st:'ok',id:'sw-cae-e1'},
+    {x:70,y:262,w:132,h:38,l:'CAE-ESX-01',s:'14 VM',st:'ok',id:'srv-cae-esx1'},
+    {x:222,y:262,w:132,h:38,l:'CAE-ESX-02',s:'12 VM',st:'ok',id:'srv-cae-esx2'},
+    {x:374,y:262,w:132,h:38,l:'CAE-FS-01',s:'Fichiers',st:'warn',id:'srv-cae-fs'},
+    {x:526,y:262,w:132,h:38,l:'CAE-BKP-01',s:'Veeam',st:'ok',id:'srv-cae-fs'},
+    {x:678,y:262,w:132,h:38,l:'CAE-VPN-01',s:'Passerelle',st:'ok',id:'srv-cae-fs'},
+    {x:840,y:150,w:150,h:40,l:'Liaison ROU',s:'MPLS · 11 ms',st:'ok',id:null},
+    {x:840,y:262,w:150,h:38,l:'Liaison CHB',s:'4G secours · 126 ms',st:'warn',id:null},
+  ];
+  const L = [[0,1],[0,2],[0,3],[1,4],[1,5],[2,6],[2,7],[3,8],[0,9],[0,10]];
+  const col = s => s === 'crit' ? 'var(--crit)' : s === 'warn' ? 'var(--warn)' : 'var(--ok)';
+  const cx = n => n.x + n.w / 2;
+  return `
+  <div class="page-h">
+    <div><div class="eyebrow">§1 — cartographie automatique via CDP / LLDP</div>
+      <h1>Carte réseau</h1>
+      <p>Construite automatiquement à partir des tables de voisinage. Aucun lien n'est saisi à la main : la découverte remonte de proche en proche depuis le cœur de réseau.</p></div>
+    <div class="right">
+      <select class="btn"><option>Caen — Siège</option><option>Rouen — Usine</option><option>Tous les sites</option></select>
+      <button class="btn" data-modal="histo">Historique des changements</button>
+      <button class="btn ghost" data-toast="Carte exportée en PNG.">Exporter</button>
+    </div>
+  </div>
+  <div class="topo">
+    <svg viewBox="0 0 1020 330">
+      <defs><pattern id="g" width="34" height="34" patternUnits="userSpaceOnUse">
+        <path d="M34 0H0V34" fill="none" stroke="#12242F" stroke-width="1"/></pattern></defs>
+      <rect width="1020" height="330" fill="url(#g)"/>
+      ${L.map(([a, b]) => {
+        const A = N[a], B = N[b];
+        const cls = (B.st === 'warn' && b === 10) ? 'link down' : (b <= 3 ? 'link hot' : 'link');
+        return `<path class="${cls}" fill="none" d="M${cx(A)} ${A.y + A.h} C${cx(A)} ${A.y + A.h + 34}, ${cx(B)} ${B.y - 34}, ${cx(B)} ${B.y}"/>`;
+      }).join('')}
+      ${N.map(n => `
+        <g class="node" ${n.id ? `data-eq="${n.id}" style="cursor:pointer"` : ''}>
+          <rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="8" fill="var(--panel)" stroke="var(--line)"/>
+          <rect x="${n.x}" y="${n.y}" width="4" height="${n.h}" rx="2" fill="${col(n.st)}"/>
+          <text x="${n.x + 14}" y="${n.y + 18}" fill="var(--text)" font-size="12" font-family="Instrument Sans" font-weight="600">${n.l}</text>
+          <text x="${n.x + 14}" y="${n.y + 32}" fill="var(--faint)" font-size="10" font-family="IBM Plex Mono">${n.s}</text>
+        </g>`).join('')}
+      <text x="16" y="24" fill="var(--faint)" font-size="10" font-family="IBM Plex Mono">CAEN — 34 équipements — dernière découverte 06:00</text>
+    </svg>
+  </div>
+  <div class="row" style="margin-top:14px">
+    <div class="card" style="flex:2;min-width:300px">
+      <div class="card-h"><h3>Changements de topologie</h3><span class="sub">7 derniers jours</span></div>
+      <div class="feed">
+        <div class="ev"><div class="t">02/08 09:52</div><div class="body"><div class="title">Équipement non répertorié branché</div><div class="sub">TP-Link TL-SG108 (10.20.4.87) sur ROU-PROD-SW04 · Gi1/0/18</div></div><div class="act"><span class="tag crit">rogue</span></div></div>
+        <div class="ev"><div class="t">01/08 15:11</div><div class="body"><div class="title">Nouveau voisin LLDP</div><div class="sub">CAE-DMZ-SW05 apparaît sur CAE-CORE-01 · Te1/1/4</div></div><div class="act"><span class="tag ok">ajout</span></div></div>
+        <div class="ev"><div class="t">31/07 10:03</div><div class="body"><div class="title">Câblage modifié</div><div class="sub">CAE-FS-01 déplacé de Gi1/0/22 vers Gi1/0/31 (même VLAN 20)</div></div><div class="act"><span class="tag">déplacement</span></div></div>
+        <div class="ev"><div class="t">28/07 08:40</div><div class="body"><div class="title">Équipement retiré</div><div class="sub">LHV-OLD-SW02 ne répond plus depuis 72 h — sorti de la carte</div></div><div class="act"><span class="tag warn">retrait</span></div></div>
+      </div>
+    </div>
+    <div class="card" style="flex:1;min-width:260px">
+      <div class="card-h"><h3>Tracer un poste</h3><span class="sub">table CAM</span></div>
+      <div class="card-b">
+        <div class="field"><label>Adresse MAC ou IP</label><input value="00:1B:44:C4:8B:19"></div>
+        <button class="btn primary" style="width:100%" data-toast="Poste localisé : ROU-PROD-SW04 · Gi1/0/12 · VLAN 20.">Localiser</button>
+        <div class="okbox" style="margin-top:12px">
+          Vu pour la dernière fois il y a 3 min<br>
+          <span class="mono" style="color:var(--dim)">ROU-PROD-SW04 · Gi1/0/12 · VLAN 20 · 10.20.20.114</span>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ============================================================
+   4 — Inventaire & découverte
+   ============================================================ */
+function vInv() {
+  return `
+  <div class="page-h">
+    <div><div class="eyebrow">§1 — découverte automatique et récursive</div>
+      <h1>Inventaire</h1>
+      <p>131 équipements, tous découverts automatiquement. La seule saisie manuelle est l'adresse IP du cœur de réseau de chaque site.</p></div>
+    <div class="right">
+      <button class="btn" data-toast="Inventaire exporté (CSV).">Exporter CSV</button>
+      <button class="btn" data-toast="Rapport d'inventaire généré (PDF).">Exporter PDF</button>
+      <button class="btn primary" data-modal="discover">Lancer une découverte</button>
+    </div>
+  </div>
+
+  <div class="grid c4" style="margin-bottom:14px">
+    <div class="card"><div class="card-b"><div class="eyebrow">Équipements</div><div class="val num" style="font-family:var(--f-dis);font-size:26px;font-weight:800">131</div><div class="sub dim">+3 depuis hier</div></div></div>
+    <div class="card"><div class="card-b"><div class="eyebrow">Firmwares à mettre à jour</div><div style="font-family:var(--f-dis);font-size:26px;font-weight:800;color:var(--warn)">7</div><div class="sub dim">dont 2 avec CVE connue</div></div></div>
+    <div class="card"><div class="card-b"><div class="eyebrow">Non répertoriés</div><div style="font-family:var(--f-dis);font-size:26px;font-weight:800;color:var(--crit)">1</div><div class="sub dim">détecté aujourd'hui</div></div></div>
+    <div class="card"><div class="card-b"><div class="eyebrow">Dernière découverte</div><div style="font-family:var(--f-dis);font-size:26px;font-weight:800">06:00</div><div class="sub dim">cycle quotidien · 4 min 12 s</div></div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-h"><span class="led crit"></span><h3>Équipement non répertorié</h3>
+      <div class="right"><button class="btn sm" data-toast="Équipement ajouté à l'inventaire.">Déclarer</button><button class="btn sm danger" data-toast="Port Gi1/0/18 désactivé.">Désactiver le port</button></div></div>
+    <div class="card-b" style="display:flex;gap:22px;flex-wrap:wrap">
+      <div><div class="eyebrow">Adresse IP</div><div class="mono">10.20.4.87</div></div>
+      <div><div class="eyebrow">MAC</div><div class="mono">C4:E9:84:2B:71:0F</div></div>
+      <div><div class="eyebrow">Constructeur (OUI)</div><div class="mono">TP-Link</div></div>
+      <div><div class="eyebrow">Vu sur</div><div class="mono">ROU-PROD-SW04 · Gi1/0/18</div></div>
+      <div><div class="eyebrow">Depuis</div><div class="mono">02/08 09:52 (2 h)</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><h3>Tous les équipements</h3>
+      <div class="right">
+        <select class="btn sm"><option>Tous les sites</option>${SITES.map(s => `<option>${s.nom}</option>`).join('')}</select>
+        <select class="btn sm"><option>Tous les types</option><option>Switch</option><option>Serveur</option><option>Stockage</option></select>
+      </div></div>
+    <div class="tw"><table>
+      <thead><tr><th></th><th>Nom</th><th>Site</th><th>Type</th><th>Marque / modèle</th><th>IP</th><th>Numéro de série</th><th>Firmware</th><th>Ports</th><th></th></tr></thead>
+      <tbody>${EQUIP.map(e => `
+        <tr class="rowlink" data-eq="${e.id}">
+          <td><span class="led ${e.etat}"></span></td>
+          <td><b>${e.nom}</b>${e.role ? `<span class="tag acc" style="margin-left:7px">${e.role}</span>` : ''}${e.rogue ? '<span class="tag crit" style="margin-left:7px">non répertorié</span>' : ''}</td>
+          <td class="dim">${siteById(e.site).code}</td>
+          <td class="dim">${e.type}</td>
+          <td class="dim">${e.marque} ${e.modele}</td>
+          <td class="num dim">${e.ip}</td>
+          <td class="num dim">${e.sn}</td>
+          <td class="num">${e.fw}${e.note && e.note.includes('CVE') ? '<span class="tag crit" style="margin-left:6px">CVE</span>' : ''}</td>
+          <td class="num dim">${e.ports ? e.actifs + '/' + e.ports : '—'}</td>
+          <td><button class="btn sm ghost" data-cli="${e.nom}">CLI</button></td>
+        </tr>`).join('')}</tbody></table></div>
+  </div>`;
+}
+
+/* ============================================================
+   5 — Fiche switch
+   ============================================================ */
+let SELPORT = 12;
+function vSwitch() {
+  const e = eqById('sw-cae-core');
+  const p = PORTS.find(x => x.n === SELPORT);
+  const grp = (arr) => `<div class="fp-grp">${arr.map(x => `
+     <button class="port ${x.etat === 'free' ? '' : x.etat} ${x.n === SELPORT ? 'sel' : ''}" data-port="${x.n}" title="${x.nom} — ${x.desc}"><i></i></button>`).join('')}</div>`;
+  const top = PORTS.filter(x => x.n % 2 === 1), bot = PORTS.filter(x => x.n % 2 === 0);
+  const chunk = (a, n) => Array.from({length: Math.ceil(a.length / n)}, (_, i) => a.slice(i * n, i * n + n));
+  return `
+  <div class="page-h">
+    <div><div class="eyebrow">${siteById(e.site).nom} · ${e.role}</div>
+      <h1>${e.nom}</h1>
+      <p>${e.marque} ${e.modele} · ${e.ip} · série ${e.sn} · IOS-XE ${e.fw} · uptime ${e.uptime}</p></div>
+    <div class="right">
+      <button class="btn" data-cli="${e.nom}">Ouvrir la console CLI</button>
+      <button class="btn ghost" data-toast="Configuration sauvegardée dans le dépôt de configs.">Sauvegarder la config</button>
+      <button class="btn ghost" data-modal="maint">Maintenance</button>
+    </div>
+  </div>
+
+  <div class="grid c4" style="margin-bottom:14px">
+    <div class="card"><div class="card-b"><div class="eyebrow">Ports actifs</div><div style="font-family:var(--f-dis);font-size:26px;font-weight:800">39<span class="dim" style="font-size:16px">/48</span></div><div class="sub dim">9 libres — 19 % de marge</div></div></div>
+    <div class="card"><div class="card-b"><div class="eyebrow">Température châssis</div><div style="font-family:var(--f-dis);font-size:26px;font-weight:800">41 °C</div><div class="sub dim">seuil d'alerte 60 °C</div></div></div>
+    <div class="card"><div class="card-b"><div class="eyebrow">Alimentations</div><div style="font-family:var(--f-dis);font-size:26px;font-weight:800;color:var(--ok)">2/2</div><div class="sub dim">redondance assurée</div></div></div>
+    <div class="card"><div class="card-b"><div class="eyebrow">Budget PoE</div><div style="font-family:var(--f-dis);font-size:26px;font-weight:800">412 W<span class="dim" style="font-size:16px">/740</span></div><div class="sub dim">56 % utilisés</div></div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-h"><h3>Façade</h3><span class="sub">cliquez sur un port</span>
+      <div class="right"><span class="tag ok">39 up</span><span class="tag warn">1 en erreur</span><span class="tag crit">1 down</span><span class="tag">7 libres</span></div></div>
+    <div class="card-b">
+      <div class="faceplate">
+        <div class="fp-rows">
+          <div class="fp-row">${chunk(top, 6).map(grp).join('')}<div class="fp-grp"><button class="port sfp up" title="Te1/1/1 — uplink"><i></i></button><button class="port sfp up" title="Te1/1/3 — uplink"><i></i></button></div></div>
+          <div class="fp-row">${chunk(bot, 6).map(grp).join('')}<div class="fp-grp"><button class="port sfp up" title="Te1/1/2 — uplink"><i></i></button><button class="port sfp" title="Te1/1/4 — libre"><i></i></button></div></div>
+        </div>
+      </div>
+      <div class="fp-legend">
+        <span><i class="led ok"></i>lien actif</span><span><i class="led warn"></i>erreurs détectées</span>
+        <span><i class="led crit"></i>lien tombé</span><span><i class="led"></i>port libre</span>
+        <span style="margin-left:auto">Agrégat LACP Po1 : Te1/1/1 + Te1/1/2 — <b style="color:var(--ok)">actif</b></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid split" style="margin-bottom:14px">
+    <div class="card">
+      <div class="card-h"><h3>Port ${p.nom}</h3><span class="sub">${p.desc}</span>
+        <div class="right">${p.etat === 'err' ? '<span class="tag warn">erreurs CRC</span>' : p.etat === 'down' ? '<span class="tag crit">down</span>' : '<span class="tag ok">up</span>'}
+        <button class="btn sm ghost" data-toast="Port ${p.nom} redémarré (shut / no shut).">Redémarrer le port</button></div></div>
+      <div class="card-b">
+        <div class="grid c3" style="gap:12px 20px">
+          <div><div class="eyebrow">État</div><div>${p.etat === 'free' ? 'Libre' : p.etat === 'down' ? 'Down' : 'Up'} · ${p.vitesse} · ${p.duplex}</div></div>
+          <div><div class="eyebrow">VLAN</div><div class="mono">${p.vlan}</div></div>
+          <div><div class="eyebrow">STP</div><div>${p.stp}</div></div>
+          <div><div class="eyebrow">MAC apprise</div><div class="mono">${p.mac}</div></div>
+          <div><div class="eyebrow">PoE</div><div class="mono">${p.poe} W</div></div>
+          <div><div class="eyebrow">Voisin CDP/LLDP</div><div class="mono">${p.voisin}</div></div>
+        </div>
+        <hr class="sep">
+        <div class="between" style="margin-bottom:8px"><div class="eyebrow">Trafic 24 h</div><div class="mono faint" style="font-size:11px">↓ ${p.inMb} Mb/s · ↑ ${p.outMb} Mb/s</div></div>
+        ${areaChart([{n:'Entrant', c:'var(--accent)', v:serie(48, 60, 40)}, {n:'Sortant', c:'var(--info)', v:serie(48, 30, 25)}], 560, 150, HOURS)}
+        ${p.crc > 100 ? `<div class="warnbox" style="margin-top:12px"><b>${p.crc} erreurs CRC sur la dernière heure</b> — au-delà du seuil de 100/h. Causes fréquentes : câble abîmé, SFP défaillant, désaccord de duplex.</div>` : ''}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><h3>État du châssis</h3><span class="sub">OID constructeur</span></div>
+      <div class="card-b">
+        ${meter('CPU', e.cpu, ' %')}
+        ${meter('Mémoire', e.mem, ' %')}
+        ${meter('Température', e.temp, ' °C', [55, 65])}
+        <hr class="sep">
+        <div class="minirow" style="flex-direction:column;gap:8px">
+          <div class="between" style="width:100%"><span>Alimentation A</span><span class="tag ok">OK · 210 W</span></div>
+          <div class="between" style="width:100%"><span>Alimentation B</span><span class="tag ok">OK · 202 W</span></div>
+          <div class="between" style="width:100%"><span>Ventilateur 1</span><span class="tag ok">3 120 tr/min</span></div>
+          <div class="between" style="width:100%"><span>Ventilateur 2</span><span class="tag ok">3 040 tr/min</span></div>
+          <div class="between" style="width:100%"><span>Détection de boucle</span><span class="tag ok">aucune</span></div>
+          <div class="between" style="width:100%"><span>Spanning tree</span><span class="tag ok">racine · stable 412 j</span></div>
+        </div>
+        <hr class="sep">
+        <div class="eyebrow" style="margin-bottom:8px">Température 7 jours</div>
+        ${areaChart([{n:'°C', c:'var(--warn)', v:serie(56, 40, 3)}], 380, 120, ['J-7','J-5','J-3','J-1','auj.'])}
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><h3>VLAN déclarés sur cet équipement</h3></div>
+    <div class="tw"><table>
+      <thead><tr><th>VLAN</th><th>Nom</th><th>Ports</th><th>Interface L3</th><th>MAC apprises</th></tr></thead>
+      <tbody>
+        <tr><td class="num">10</td><td>POSTES</td><td class="num dim">14</td><td class="num dim">10.10.10.1/24</td><td class="num dim">126</td></tr>
+        <tr><td class="num">20</td><td>SERVEURS</td><td class="num dim">9</td><td class="num dim">10.10.20.1/24</td><td class="num dim">38</td></tr>
+        <tr><td class="num">30</td><td>VOIP</td><td class="num dim">8</td><td class="num dim">10.10.30.1/24</td><td class="num dim">41</td></tr>
+        <tr><td class="num">40</td><td>WIFI-INVITES</td><td class="num dim">4</td><td class="num dim">10.10.40.1/24</td><td class="num dim">73</td></tr>
+        <tr><td class="num">99</td><td>ADMIN</td><td class="num dim">4</td><td class="num dim">10.10.99.1/24</td><td class="num dim">17</td></tr>
+      </tbody></table></div>
+  </div>`;
+}
+
+/* ============================================================
+   6 — Fiche serveur
+   ============================================================ */
+function vServer() {
+  const e = eqById('srv-rou-app');
+  return `
+  <div class="page-h">
+    <div><div class="eyebrow">${siteById(e.site).nom} · serveur applicatif</div>
+      <h1>${e.nom} <span class="tag crit" style="vertical-align:middle">incident</span></h1>
+      <p>${e.marque} ${e.modele} · ${e.os} · ${e.ip} · iLO ${e.fw} · uptime ${e.uptime}</p></div>
+    <div class="right">
+      <button class="btn" data-cli="${e.nom}">Ouvrir la console CLI</button>
+      <button class="btn ghost" data-go="backup">Sauvegardes de la machine</button>
+      <button class="btn ghost" data-modal="maint">Maintenance</button>
+    </div>
+  </div>
+
+  <div class="critbox" style="margin-bottom:14px">
+    <b>Grappe RAID 5 dégradée</b> — disque 3 (bay 2, série WD-K72LM8) en panne depuis 13:48. Aucun disque de secours configuré : une seconde panne entraînerait la perte du volume.
+    <div style="margin-top:9px;display:flex;gap:8px"><button class="btn sm danger" data-toast="Ticket #4821 créé dans l'ITSM.">Créer un ticket</button><button class="btn sm ghost" data-go="ia">Voir la procédure recommandée</button></div>
+  </div>
+
+  <div class="grid c4" style="margin-bottom:14px">
+    <div class="card"><div class="card-b"><div class="eyebrow">CPU</div><div style="font-family:var(--f-dis);font-size:26px;font-weight:800;color:var(--crit)">${e.cpu} %</div><div class="sub dim">16 cœurs · charge 14,2</div>${sparkline(serie(30, 60, 20, .8), 120, 34, 'var(--crit)')}</div></div>
+    <div class="card"><div class="card-b"><div class="eyebrow">Mémoire</div><div style="font-family:var(--f-dis);font-size:26px;font-weight:800;color:var(--warn)">${e.mem} %</div><div class="sub dim">56 Go / 64 Go · swap 12 %</div>${sparkline(serie(30, 70, 12, .4), 120, 34, 'var(--warn)')}</div></div>
+    <div class="card"><div class="card-b"><div class="eyebrow">Température CPU</div><div style="font-family:var(--f-dis);font-size:26px;font-weight:800">${e.temp} °C</div><div class="sub dim">carte mère 48 °C</div>${sparkline(serie(30, 65, 6, .2), 120, 34, 'var(--warn)')}</div></div>
+    <div class="card"><div class="card-b"><div class="eyebrow">Disponibilité 30 j</div><div style="font-family:var(--f-dis);font-size:26px;font-weight:800">99,12 %</div><div class="sub dim">2 redémarrages</div>${sparkline(serie(30, 99, 1), 120, 34, 'var(--ok)')}</div></div>
+  </div>
+
+  <div class="grid split" style="margin-bottom:14px">
+    <div class="card">
+      <div class="card-h"><h3>Métriques 24 h</h3><span class="sub">agent local · pas de 60 s</span>
+        <div class="right"><select class="btn sm"><option>24 heures</option><option>7 jours</option><option>30 jours</option><option>12 mois</option></select></div></div>
+      <div class="card-b">${areaChart([
+        {n:'CPU %', c:'var(--crit)', v:serie(48, 55, 25, .5)},
+        {n:'Mémoire %', c:'var(--warn)', v:serie(48, 70, 10, .2)},
+        {n:'Réseau Mb/s', c:'var(--accent)', v:serie(48, 30, 22)},
+      ], 620, 210, HOURS)}</div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Matériel</h3><span class="sub">IPMI / Redfish</span></div>
+      <div class="card-b">
+        <div class="minirow" style="flex-direction:column;gap:9px">
+          <div class="between" style="width:100%"><span>Alimentation 1</span><span class="tag ok">OK · 320 W</span></div>
+          <div class="between" style="width:100%"><span>Alimentation 2</span><span class="tag ok">OK · 314 W</span></div>
+          <div class="between" style="width:100%"><span>Ventilateurs (6)</span><span class="tag ok">5 800–6 100 tr/min</span></div>
+          <div class="between" style="width:100%"><span>Grappe RAID 5</span><span class="tag crit">dégradée</span></div>
+          <div class="between" style="width:100%"><span>Disque 1 · 2 · 4</span><span class="tag ok">sains</span></div>
+          <div class="between" style="width:100%"><span>Disque 3</span><span class="tag crit">en panne</span></div>
+          <div class="between" style="width:100%"><span>Carte réseau eno1</span><span class="tag ok">10 Gb/s · full</span></div>
+        </div>
+        <hr class="sep">
+        <div class="eyebrow" style="margin-bottom:9px">Volumes</div>
+        ${meter('/ (root)', 62)}
+        ${meter('/var', 78)}
+        ${meter('/data', 43)}
+        ${meter('Latence disque', 18, ' ms', [20, 40])}
+      </div>
+    </div>
+  </div>
+
+  <div class="grid c3">
+    <div class="card">
+      <div class="card-h"><h3>Services supervisés</h3></div>
+      <div class="tw"><table><thead><tr><th></th><th>Service</th><th>Port</th><th>Depuis</th></tr></thead><tbody>
+        <tr><td><span class="led ok"></span></td><td>nginx</td><td class="num dim">443</td><td class="num dim">12 j</td></tr>
+        <tr><td><span class="led ok"></span></td><td>postgresql</td><td class="num dim">5432</td><td class="num dim">12 j</td></tr>
+        <tr><td><span class="led warn"></span></td><td>app-metier</td><td class="num dim">8080</td><td class="num dim">redémarré 2×</td></tr>
+        <tr><td><span class="led ok"></span></td><td>sshd</td><td class="num dim">22</td><td class="num dim">12 j</td></tr>
+        <tr><td><span class="led ok"></span></td><td>veeam-agent</td><td class="num dim">—</td><td class="num dim">12 j</td></tr>
+      </tbody></table></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Certificats</h3></div>
+      <div class="tw"><table><thead><tr><th></th><th>Domaine</th><th>Expire</th></tr></thead><tbody>
+        <tr><td><span class="led crit"></span></td><td>app.exemple.fr</td><td class="num">dans 9 j</td></tr>
+        <tr><td><span class="led warn"></span></td><td>intranet.exemple.fr</td><td class="num">dans 26 j</td></tr>
+        <tr><td><span class="led ok"></span></td><td>vpn.exemple.fr</td><td class="num">dans 214 j</td></tr>
+      </tbody></table></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Journaux système</h3><span class="sub">erreurs critiques</span></div>
+      <div class="feed" style="max-height:210px;overflow:auto">
+        <div class="ev"><div class="t">13:48</div><div class="body"><div class="title mono" style="font-size:12px">kernel: sd 0:2:3:0 I/O error</div></div></div>
+        <div class="ev"><div class="t">13:48</div><div class="body"><div class="title mono" style="font-size:12px">hpsa: logical drive degraded</div></div></div>
+        <div class="ev"><div class="t">11:02</div><div class="body"><div class="title mono" style="font-size:12px">app-metier: OOM killed, restarting</div></div></div>
+        <div class="ev"><div class="t">03:14</div><div class="body"><div class="title mono" style="font-size:12px">veeam: backup job failed (I/O)</div></div></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ============================================================
+   7 — Sauvegardes (§4 + §13)
+   ============================================================ */
+let BK_TAB = 'suivi';
+function vBackup() {
+  const tabs = [['suivi','Suivi des jobs'],['calendrier','Calendrier'],['points','Points de sauvegarde'],['conformite','Conformité']];
+  return `
+  <div class="page-h">
+    <div><div class="eyebrow">§4 · §13 — supervision, visualisation, restauration</div>
+      <h1>Sauvegardes</h1>
+      <p>La plateforme lit l'état des outils de sauvegarde en place (Veeam, Hyper Backup, agents) et pilote les restaurations via leur API — elle ne remplace pas le moteur de sauvegarde.</p></div>
+    <div class="right">
+      <button class="btn" data-toast="Rapport de sauvegarde exporté (PDF).">Exporter le rapport</button>
+      <button class="btn primary" data-modal="restore">Restaurer des données</button>
+    </div>
+  </div>
+
+  <div class="kpis" style="margin-bottom:16px">
+    <div class="kpi"><div class="lab">Jobs de la nuit</div><div class="val">6<span class="dim" style="font-size:18px">/8</span></div><div class="sub">1 échec · 1 non exécuté</div></div>
+    <div class="kpi"><div class="lab">Taux de réussite 30 j</div><div class="val">94,1 %</div><div class="sub">objectif 98 %</div>${sparkline(serie(20,94,4),110,34,'var(--warn)')}</div>
+    <div class="kpi"><div class="lab">Volume protégé</div><div class="val">9,9 To</div><div class="sub">+4,2 % sur 30 jours</div>${sparkline(serie(20,9,.6,.05),110,34,'var(--accent)')}</div>
+    <div class="kpi"><div class="lab">Stockage de sauvegarde</div><div class="val">68 %</div><div class="sub">27,1 To libres sur 84 To</div></div>
+    <div class="kpi"><div class="lab">Machines non couvertes</div><div class="val" style="color:var(--crit)">1</div><div class="sub">EVX-SRV-01</div></div>
+  </div>
+
+  <div class="tabs">${tabs.map(([k, l]) => `<button class="tab ${BK_TAB === k ? 'on' : ''}" data-bktab="${k}">${l}</button>`).join('')}</div>
+  ${BK_TAB === 'suivi' ? bkSuivi() : BK_TAB === 'calendrier' ? bkCal() : BK_TAB === 'points' ? bkPoints() : bkConf()}`;
+}
+function bkSuivi() {
+  return `<div class="card">
+    <div class="card-h"><h3>État des jobs</h3><span class="sub">dernières 24 h</span>
+      <div class="right"><select class="btn sm"><option>Tous les sites</option>${SITES.map(s => `<option>${s.nom}</option>`).join('')}</select></div></div>
+    <div class="tw"><table>
+      <thead><tr><th></th><th>Machine</th><th>Site</th><th>Outil</th><th>Dernière réussie</th><th>Durée</th><th>Taille</th><th>Réussite 30 j</th><th>Rétention</th><th></th></tr></thead>
+      <tbody>${BACKUPS.map(b => `
+        <tr>
+          <td><span class="led ${b.statut === 'none' ? '' : b.statut}"></span></td>
+          <td><b>${b.machine}</b><div class="faint" style="font-size:11px">${b.politique}</div></td>
+          <td class="dim">${siteById(b.site).code}</td>
+          <td class="dim">${b.outil}</td>
+          <td class="num ${b.statut === 'crit' || b.statut === 'none' ? '' : 'dim'}" style="${b.statut === 'crit' || b.statut === 'none' ? 'color:var(--crit)' : ''}">${b.derniere}</td>
+          <td class="num dim">${b.duree}</td>
+          <td class="num dim">${b.taille}</td>
+          <td style="min-width:120px"><div class="meter"><i class="${b.taux > 95 ? 'ok' : b.taux > 80 ? 'warn' : 'crit'}" style="width:${b.taux}%"></i></div><span class="num faint" style="font-size:11px">${b.taux} %</span></td>
+          <td class="num dim">${b.retention}</td>
+          <td style="white-space:nowrap">
+            ${b.statut === 'crit' ? '<button class="btn sm" data-toast="Job relancé — exécution en cours.">Relancer</button>' : ''}
+            ${b.statut === 'none' ? '<button class="btn sm" data-toast="Assistant de politique de sauvegarde ouvert.">Protéger</button>' : '<button class="btn sm ghost" data-modal="restore">Restaurer</button>'}
+          </td>
+        </tr>`).join('')}</tbody></table></div>
+  </div>
+  <div class="grid c2" style="margin-top:14px">
+    <div class="card"><div class="card-h"><h3>Volume sauvegardé</h3><span class="sub">30 jours</span></div>
+      <div class="card-b">${areaChart([{n:'To', c:'var(--accent)', v:serie(30, 9, .5, .04)}], 560, 170, ['J-30','J-20','J-10','auj.'])}</div></div>
+    <div class="card"><div class="card-h"><h3>Vérification d'intégrité</h3></div>
+      <div class="tw"><table><thead><tr><th></th><th>Machine</th><th>Type</th><th>Dernier test</th><th>Résultat</th></tr></thead><tbody>
+        <tr><td><span class="led ok"></span></td><td>CAE-ESX-01</td><td class="dim">Restauration à blanc (VM isolée)</td><td class="num dim">28/07</td><td class="tag ok">démarrage OK</td></tr>
+        <tr><td><span class="led ok"></span></td><td>CAE-FS-01</td><td class="dim">Somme de contrôle</td><td class="num dim">01/08</td><td class="tag ok">conforme</td></tr>
+        <tr><td><span class="led warn"></span></td><td>ROU-DB-01</td><td class="dim">Somme de contrôle</td><td class="num dim">28/07</td><td class="tag warn">taille anormale</td></tr>
+        <tr><td><span class="led"></span></td><td>CHB-AD-01</td><td class="dim">—</td><td class="num dim">jamais</td><td class="tag">à planifier</td></tr>
+      </tbody></table></div></div>
+  </div>`;
+}
+function bkCal() {
+  return `<div class="card">
+    <div class="card-h"><h3>Trente derniers jours</h3>
+      <div class="right legend"><span><i class="led ok"></i>réussie</span><span><i class="led warn"></i>avertissement</span><span><i class="led crit"></i>échec</span><span><i class="led"></i>non exécutée</span></div></div>
+    <div class="card-b" style="display:flex;flex-direction:column;gap:14px">
+      ${BACKUPS.map(b => `
+        <div style="display:flex;gap:14px;align-items:center">
+          <div style="width:190px;flex:none">
+            <div style="font-size:13px;font-weight:500">${b.machine}</div>
+            <div class="faint mono" style="font-size:10.5px">${siteById(b.site).code} · ${b.outil}</div>
+          </div>
+          <div class="cal" style="flex:1">${b.cal.map((c, i) => `<i class="${c}" title="J-${30 - i} · ${c === 'ok' ? 'réussie' : c === 'warn' ? 'avertissement' : c === 'crit' ? 'échec' : 'non exécutée'}"></i>`).join('')}</div>
+          <div class="num" style="width:52px;text-align:right;font-size:12px">${b.taux} %</div>
+        </div>`).join('')}
+    </div>
+  </div>
+  <div class="warnbox" style="margin-top:14px">Deux trous consécutifs détectés sur <b>ROU-APP-01</b> (31/07 et 01/08) et un sur <b>CHB-AD-01</b> (01/08). Le SLA « pas plus de 24 h sans sauvegarde réussie » n'est plus respecté sur ces deux machines.</div>`;
+}
+function bkPoints() {
+  const pts = [
+    {d:'02/08 01:12', t:'Incrémentale', taille:'42 Go', duree:'18 min', comp:'2,4×', ok:true},
+    {d:'01/08 01:10', t:'Incrémentale', taille:'39 Go', duree:'17 min', comp:'2,4×', ok:true},
+    {d:'31/07 01:11', t:'Incrémentale', taille:'44 Go', duree:'19 min', comp:'2,3×', ok:true},
+    {d:'30/07 01:09', t:'Complète', taille:'2,41 To', duree:'1 h 42', comp:'2,1×', ok:true},
+    {d:'29/07 01:12', t:'Incrémentale', taille:'11 Go', duree:'6 min', comp:'2,6×', ok:false},
+    {d:'28/07 01:10', t:'Incrémentale', taille:'40 Go', duree:'18 min', comp:'2,4×', ok:true},
+  ];
+  return `<div class="grid split">
+    <div class="card">
+      <div class="card-h"><h3>CAE-ESX-01 — points disponibles</h3><span class="sub">14 points · rétention 14 jours</span></div>
+      <div class="tw"><table><thead><tr><th></th><th>Date</th><th>Type</th><th>Taille</th><th>Durée</th><th>Compression</th><th></th></tr></thead>
+      <tbody>${pts.map(p => `<tr>
+        <td><span class="led ${p.ok ? 'ok' : 'warn'}"></span></td>
+        <td class="num">${p.d}</td><td>${p.t}</td><td class="num">${p.taille}</td>
+        <td class="num dim">${p.duree}</td><td class="num dim">${p.comp}</td>
+        <td><button class="btn sm ghost" data-modal="restore">Restaurer</button></td></tr>`).join('')}</tbody></table></div>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-h"><h3>Évolution de la taille</h3><span class="sub">détection d'anomalie</span></div>
+        <div class="card-b">${areaChart([{n:'Go', c:'var(--accent)', v:[42, 40, 44, 39, 11, 40, 44, 39, 42, 41, 43, 42]}], 400, 150, ['J-12','J-8','J-4','auj.'])}
+        <div class="warnbox" style="margin-top:10px">Le point du 29/07 pèse 11 Go contre 41 Go en moyenne (−73 %). Un job interrompu produit souvent un point valide en apparence mais incomplet.</div></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>Contenu du point du 02/08 01:12</h3></div>
+        <div class="card-b mono" style="font-size:12px;color:var(--dim);line-height:1.9">
+          14 VM · 2,41 To bruts → 1,00 To stockés<br>
+          Datastore-01 (9 VM) · Datastore-02 (5 VM)<br>
+          Somme de contrôle vérifiée le 02/08 03:40<br>
+          Copie secondaire : NAS Le Havre (règle 3-2-1) ✓
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+function bkConf() {
+  return `<div class="card">
+    <div class="card-h"><h3>Couverture des machines</h3><span class="sub">quelles machines sont protégées, lesquelles ne le sont pas</span>
+      <div class="right"><button class="btn sm ghost" data-toast="Rapport de conformité exporté (Excel).">Exporter</button></div></div>
+    <div class="tw"><table>
+      <thead><tr><th></th><th>Machine</th><th>Site</th><th>Politique appliquée</th><th>Fréquence</th><th>Rétention exigée</th><th>Rétention réelle</th><th>Conformité</th></tr></thead>
+      <tbody>
+        ${BACKUPS.map(b => {
+          const conf = b.statut === 'none' ? 'crit' : b.statut === 'ok' ? 'ok' : 'warn';
+          return `<tr><td><span class="led ${conf}"></span></td><td><b>${b.machine}</b></td><td class="dim">${siteById(b.site).code}</td>
+            <td class="dim">${b.politique}</td><td class="dim">Quotidienne</td><td class="num dim">${b.retention.split('/')[1]} j</td>
+            <td class="num">${b.retention.split('/')[0]} j</td>
+            <td><span class="tag ${conf}">${conf === 'ok' ? 'conforme' : conf === 'warn' ? 'écart' : 'non protégée'}</span></td></tr>`;
+        }).join('')}
+      </tbody></table></div>
+  </div>
+  <div class="critbox" style="margin-top:14px"><b>EVX-SRV-01 n'est couverte par aucune politique de sauvegarde.</b> Découverte le 12/07 lors du raccordement du site d'Évreux, jamais rattachée à un job.
+    <div style="margin-top:9px"><button class="btn sm" data-toast="Assistant de politique de sauvegarde ouvert.">Créer une politique</button></div></div>`;
+}
+
+/* ============================================================
+   8 — Alertes (§5)
+   ============================================================ */
+let ALERT_TAB = 'cours';
+function vAlerts() {
+  const tabs = [['cours','En cours'],['regles','Règles & seuils'],['fenetres','Fenêtres de maintenance'],['histo','Historique']];
+  return `
+  <div class="page-h">
+    <div><div class="eyebrow">§5 — moteur de règles, escalade, corrélation</div>
+      <h1>Alertes</h1>
+      <p>Les alertes liées à une même cause sont regroupées : si un switch tombe, vous recevez une notification, pas vingt.</p></div>
+    <div class="right">
+      <button class="btn ghost" data-toast="Notifications testées : e-mail, SMS et Teams reçus.">Tester les notifications</button>
+      <button class="btn" data-modal="maint">Planifier une maintenance</button>
+      <button class="btn primary" data-modal="rule">Nouvelle règle</button>
+    </div>
+  </div>
+  <div class="tabs">${tabs.map(([k, l]) => `<button class="tab ${ALERT_TAB === k ? 'on' : ''}" data-altab="${k}">${l}</button>`).join('')}</div>
+  ${ALERT_TAB === 'cours' ? alCours() : ALERT_TAB === 'regles' ? alRegles() : ALERT_TAB === 'fenetres' ? alFen() : alHisto()}`;
+}
+function alCours() {
+  const open = ALERTES.filter(a => !a.ack), ack = ALERTES.filter(a => a.ack);
+  const line = a => `
+    <div class="ev">
+      <div class="t">${a.t}</div>
+      <div class="body">
+        <div class="title"><span class="led ${a.sev === 'info' ? 'info' : a.sev}" style="margin-right:7px"></span>${a.titre}</div>
+        <div class="sub">${siteById(a.site).code} · ${a.eq} — ${esc(a.det)}</div>
+        <div class="sub faint mono" style="font-size:11px;margin-top:4px">Règle : ${a.regle} · ${a.esc}</div>
+        ${a.id === 'a1' ? `<div class="corr">Regroupe <b>4 alertes corrélées</b> : perte de PSU, hausse CPU du châssis, 2 ports en flapping. Cause probable unique — une seule notification envoyée.</div>` : ''}
+      </div>
+      <div class="act">
+        ${a.ack ? '<span class="tag">acquittée</span>' : `<button class="btn sm" data-ack="${a.id}">Acquitter</button>`}
+        <button class="btn sm ghost" data-cli="${a.eq}">CLI</button>
+      </div>
+    </div>`;
+  return `
+  <div class="grid split">
+    <div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-h"><span class="led crit"></span><h3>Non acquittées</h3><span class="sub">${open.length}</span></div>
+        <div class="feed">${open.map(line).join('') || '<div class="empty">Rien à traiter. Toutes les alertes sont acquittées.</div>'}</div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>Acquittées, en cours de traitement</h3><span class="sub">${ack.length}</span></div>
+        <div class="feed">${ack.map(line).join('')}</div>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-h"><h3>Canaux de notification</h3></div>
+        <div class="card-b">
+          <div class="minirow" style="flex-direction:column;gap:10px">
+            <div class="between" style="width:100%"><span>E-mail — équipe infra</span><span class="tag ok">actif</span></div>
+            <div class="between" style="width:100%"><span>SMS — astreinte N2</span><span class="tag ok">actif · critiques</span></div>
+            <div class="between" style="width:100%"><span>Microsoft Teams — canal #infra</span><span class="tag ok">actif</span></div>
+            <div class="between" style="width:100%"><span>Slack</span><span class="tag">non configuré</span></div>
+            <div class="between" style="width:100%"><span>Webhook ITSM</span><span class="tag ok">actif · ticket auto</span></div>
+          </div>
+          <hr class="sep">
+          <div class="eyebrow" style="margin-bottom:7px">Escalade</div>
+          <div class="dim" style="font-size:12.5px">Sans acquittement : <b>N1 à 0 min</b> → <b>N2 à 15 min</b> → <b>astreinte SMS à 30 min</b> → <b>responsable à 60 min</b>.</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>Alertes des 14 derniers jours</h3></div>
+        <div class="card-b">${areaChart([
+          {n:'Critiques', c:'var(--crit)', v:serie(14, 3, 3)},
+          {n:'Avertissements', c:'var(--warn)', v:serie(14, 8, 5)},
+        ], 400, 160, ['J-14','J-10','J-6','J-2'])}</div>
+      </div>
+    </div>
+  </div>`;
+}
+function alRegles() {
+  const R = [
+    ['Température châssis switch', '> 55 °C pendant 5 min', '> 65 °C', 'Switches', 'E-mail + Teams'],
+    ['Alimentation redondante', 'état ≠ ok', 'immédiat', 'Switches, serveurs', 'E-mail + SMS'],
+    ['Erreurs CRC par port', '> 100/h', '> 1 000/h', 'Tous les ports', 'E-mail'],
+    ['CPU serveur', '> 85 % pendant 10 min', '> 95 % pendant 5 min', 'Serveurs', 'E-mail + Teams'],
+    ['Espace disque', '> 90 %', '> 96 %', 'Serveurs, NAS', 'E-mail'],
+    ['Statut RAID', 'dégradé', 'volume perdu', 'Serveurs', 'E-mail + SMS'],
+    ['Sauvegarde non exécutée', '> 24 h', '> 48 h', 'Machines protégées', 'E-mail + ticket'],
+    ['Certificat SSL', 'expire < 30 j', 'expire < 7 j', 'Services web', 'E-mail'],
+    ['Firmware', 'CVE connue publiée', 'CVE score ≥ 9', 'Équipements réseau', 'E-mail + ticket'],
+    ['Équipement non répertorié', 'MAC inconnue sur un port', 'immédiat', 'Tous les sites', 'E-mail + SMS RSSI'],
+  ];
+  return `<div class="card">
+    <div class="card-h"><h3>Règles de supervision</h3><span class="sub">seuils par défaut, surchargeable par site ou par équipement</span></div>
+    <div class="tw"><table><thead><tr><th>Métrique</th><th>Avertissement</th><th>Critique</th><th>Périmètre</th><th>Notification</th><th></th></tr></thead>
+    <tbody>${R.map(r => `<tr><td><b>${r[0]}</b></td><td class="mono warn" style="color:var(--warn)">${r[1]}</td><td class="mono" style="color:var(--crit)">${r[2]}</td><td class="dim">${r[3]}</td><td class="dim">${r[4]}</td><td><button class="btn sm ghost" data-modal="rule">Modifier</button></td></tr>`).join('')}</tbody></table></div>
+  </div>`;
+}
+function alFen() {
+  return `<div class="grid c2">
+    <div class="card"><div class="card-h"><h3>Fenêtres planifiées</h3></div>
+      <div class="feed">
+        <div class="ev"><div class="t">03/08<br>20:00</div><div class="body"><div class="title">Le Havre — remplacement de switch</div><div class="sub">3 h · toutes alertes du site suspendues · S. Lemoine</div></div><div class="act"><span class="tag acc">à venir</span></div></div>
+        <div class="ev"><div class="t">09/08<br>22:00</div><div class="body"><div class="title">Cherbourg — mise à jour firmware (CVE)</div><div class="sub">2 h · CHB-CORE-01 uniquement · A. Bertin</div></div><div class="act"><span class="tag acc">à venir</span></div></div>
+        <div class="ev"><div class="t">27/07<br>21:00</div><div class="body"><div class="title">Caen — bascule électrique</div><div class="sub">4 h · site entier · terminée</div></div><div class="act"><span class="tag">passée</span></div></div>
+      </div>
+    </div>
+    <div class="card"><div class="card-h"><h3>Effet d'une fenêtre</h3></div>
+      <div class="card-b dim" style="font-size:13px;line-height:1.75">
+        Pendant une fenêtre de maintenance, la collecte des métriques continue — seules les notifications sont suspendues.
+        Les événements restent visibles dans l'historique, marqués « pendant maintenance », pour ne pas fausser le calcul de disponibilité.
+        <hr class="sep">
+        <div class="eyebrow" style="margin-bottom:8px">Disponibilité recalculée</div>
+        ${meter('Brute', 99.12, ' %', [200, 300])}
+        ${meter('Hors maintenance', 99.68, ' %', [200, 300])}
+      </div>
+    </div>
+  </div>`;
+}
+function alHisto() {
+  return `<div class="card">
+    <div class="card-h"><h3>Historique complet</h3><span class="sub">déclenchement · acquittement · résolution</span>
+      <div class="right"><select class="btn sm"><option>30 derniers jours</option><option>90 jours</option><option>12 mois</option></select></div></div>
+    <div class="tw"><table><thead><tr><th></th><th>Déclenchée</th><th>Équipement</th><th>Alerte</th><th>Acquittée par</th><th>Résolue</th><th>Durée</th></tr></thead><tbody>
+      <tr><td><span class="led crit"></span></td><td class="num">02/08 13:48</td><td>ROU-APP-01</td><td>RAID dégradé</td><td class="dim">A. Bertin · 13:52</td><td class="dim">en cours</td><td class="num">23 min</td></tr>
+      <tr><td><span class="led warn"></span></td><td class="num">02/08 02:15</td><td>CHB-CORE-01</td><td>Liaison centrale coupée</td><td class="dim">auto</td><td class="dim">02:41</td><td class="num">26 min</td></tr>
+      <tr><td><span class="led warn"></span></td><td class="num">01/08 19:02</td><td>CAE-FS-01</td><td>Service spooler arrêté</td><td class="dim">remédiation auto</td><td class="dim">19:04</td><td class="num">2 min</td></tr>
+      <tr><td><span class="led crit"></span></td><td class="num">28/07 04:11</td><td>LHV-CORE-01</td><td>Alimentation A en panne</td><td class="dim">S. Lemoine · 07:30</td><td class="dim">30/07 11:20</td><td class="num">2 j 7 h</td></tr>
+      <tr><td><span class="led warn"></span></td><td class="num">21/07 03:00</td><td>CAE-ESX-02</td><td>Sauvegarde échouée</td><td class="dim">auto (relance)</td><td class="dim">03:40</td><td class="num">40 min</td></tr>
+    </tbody></table></div>
+  </div>`;
+}
+
+/* ============================================================
+   9 — Console CLI / bastion (§12)
+   ============================================================ */
+let CLI_TARGET = 'ROU-CORE-01';
+const CLI_HELP = {
+  'show version':'Cisco IOS-XE Software, Version 16.12.04\nROU-CORE-01 uptime is 8 weeks, 5 days\nSystem serial number: FCW2301B7YU',
+  'show interfaces status':'Port      Name          Status   Vlan  Duplex Speed Type\nGi1/0/1   uplink-etg1   connected 99   a-full a-1000 10/100/1000\nGi1/0/12  prod-line-2   err-disabled 20 auto   auto  10/100/1000\nGi1/0/18  ---           notconnect  20  auto   auto  10/100/1000',
+  'show environment':'SW  PID     Serial#     Status      Sys Pwr  PoE Pwr  Watts\n1   PWR-C1-715WAC  DCB2043...  OK          Good     Good     715\n2   PWR-C1-715WAC  DCB2043...  FAIL        ---      ---      715\nTemperature: 63 C (yellow threshold 60 C)',
+  'show cdp neighbors':'Device ID        Local Intrfce   Holdtme  Capability  Platform  Port ID\nROU-PROD-SW04    Gig 1/0/24      142        S I         C9200-24  Gig 1/0/1\nROU-APP-01       Gig 1/0/3       167        H           ProLiant  eno1',
+  'help':'Commandes de démonstration : show version, show interfaces status, show environment, show cdp neighbors, clear',
+};
+function vCli() {
+  return `
+  <div class="page-h">
+    <div><div class="eyebrow">§12 — bastion intégré</div>
+      <h1>Console CLI</h1>
+      <p>La plateforme ouvre la session avec les identifiants du coffre-fort : le mot de passe de l'équipement n'est jamais affiché ni transmis au navigateur.</p></div>
+    <div class="right">
+      <select class="btn" id="cliSel">${EQUIP.filter(e => !e.rogue).map(e => `<option ${e.nom === CLI_TARGET ? 'selected' : ''}>${e.nom}</option>`).join('')}</select>
+      <button class="btn ghost" data-toast="Session RDP lancée dans le client externe.">Lancer RDP</button>
+      <button class="btn danger" data-toast="Session fermée. Enregistrement archivé (4 min 12 s).">Fermer la session</button>
+    </div>
+  </div>
+
+  <div class="grid split">
+    <div>
+      <div class="card" style="border-bottom-left-radius:0;border-bottom-right-radius:0">
+        <div class="card-h">
+          <span class="led ok"></span><h3>${CLI_TARGET}</h3>
+          <span class="sub">SSH · 10.20.0.1 · compte admin-switchs (coffre-fort)</span>
+          <div class="right"><span class="rec"><i></i>SESSION ENREGISTRÉE</span><span class="tag">expire dans 14:52</span></div>
+        </div>
+      </div>
+      <div class="term" id="term">
+        <div class="o">Connexion via le bastion arobase…
+Identifiants récupérés dans le coffre-fort (compte : admin-switchs)
+Session ouverte le 02/08/2026 à 14:06 — enregistrement actif (asciinema)
+Tapez « help » pour la liste des commandes de démonstration.</div>
+        <div class="term-in"><span class="p">${CLI_TARGET}#</span><input id="termIn" autocomplete="off" spellcheck="false" aria-label="Commande"></div>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-h"><h3>Règles d'accès</h3></div>
+        <div class="card-b">
+          <div class="minirow" style="flex-direction:column;gap:10px">
+            <div class="between" style="width:100%"><span>Rôles autorisés</span><span class="tag acc">admin · technicien N2</span></div>
+            <div class="between" style="width:100%"><span>Mot de passe visible</span><span class="tag ok">jamais</span></div>
+            <div class="between" style="width:100%"><span>Enregistrement</span><span class="tag ok">systématique</span></div>
+            <div class="between" style="width:100%"><span>Déconnexion sur inactivité</span><span class="tag">15 min</span></div>
+            <div class="between" style="width:100%"><span>Windows</span><span class="tag">SSH ou WinRM relayé</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>Sessions enregistrées</h3><div class="right"><button class="btn sm ghost" data-go="admin">Audit complet</button></div></div>
+        <div class="feed">
+          <div class="ev"><div class="t">14:06</div><div class="body"><div class="title">J. Marchand → ROU-CORE-01</div><div class="sub">en cours · 4 min 12 s · 6 commandes</div></div><div class="act"><button class="btn sm ghost" data-toast="Lecture de l'enregistrement de session.">Rejouer</button></div></div>
+          <div class="ev"><div class="t">11:41</div><div class="body"><div class="title">A. Bertin → ROU-APP-01</div><div class="sub">12 min 03 s · 24 commandes</div></div><div class="act"><button class="btn sm ghost" data-toast="Lecture de l'enregistrement de session.">Rejouer</button></div></div>
+          <div class="ev"><div class="t">09:15</div><div class="body"><div class="title">S. Lemoine → CAE-ETG1-SW02</div><div class="sub">3 min 48 s · 9 commandes</div></div><div class="act"><button class="btn sm ghost" data-toast="Lecture de l'enregistrement de session.">Rejouer</button></div></div>
+          <div class="ev"><div class="t">hier</div><div class="body"><div class="title">C. Duval → refusée</div><div class="sub">rôle sans droit CLI sur ce site — tentative journalisée</div></div><div class="act"><span class="tag crit">refus</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+function cliRun(cmd) {
+  const term = document.getElementById('term'), inp = document.getElementById('termIn');
+  const c = cmd.trim();
+  if (c === 'clear') { term.querySelectorAll('.blk').forEach(n => n.remove()); inp.value = ''; return; }
+  const out = CLI_HELP[c] !== undefined ? CLI_HELP[c] : `% Commande inconnue dans cette maquette : « ${esc(c)} ». Tapez « help ».`;
+  const blk = document.createElement('div');
+  blk.className = 'blk';
+  blk.innerHTML = `<div><span class="p">${CLI_TARGET}#</span> <span class="c">${esc(c)}</span></div><div class="o">${esc(out)}</div>`;
+  term.insertBefore(blk, term.lastElementChild);
+  inp.value = ''; term.scrollTop = term.scrollHeight;
+}
+
+/* ============================================================
+   10 — IA & auto-remédiation (§9)
+   ============================================================ */
+function vIa() {
+  return `
+  <div class="page-h">
+    <div><div class="eyebrow"><span class="phase2">Phase 2</span></div>
+      <h1 style="margin-top:8px">Analyse d'anomalies & auto-remédiation</h1>
+      <p>Le module compare chaque métrique à sa propre référence historique plutôt qu'à un seuil fixe. Il signale les dérives, propose une action, et n'exécute automatiquement que ce qui est explicitement autorisé.</p></div>
+    <div class="right"><button class="btn ghost" data-modal="autorules">Actions autorisées</button></div>
+  </div>
+
+  <div class="grid c4" style="margin-bottom:16px">
+    <div class="card"><div class="card-b"><div class="eyebrow">Anomalies ouvertes</div><div style="font-family:var(--f-dis);font-size:26px;font-weight:800">${IA.length}</div><div class="sub dim">2 avant incident</div></div></div>
+    <div class="card"><div class="card-b"><div class="eyebrow">Remédiations 30 j</div><div style="font-family:var(--f-dis);font-size:26px;font-weight:800">23</div><div class="sub dim">21 réussies · 2 transmises</div></div></div>
+    <div class="card"><div class="card-b"><div class="eyebrow">Incidents évités (estim.)</div><div style="font-family:var(--f-dis);font-size:26px;font-weight:800">6</div><div class="sub dim">selon suivi manuel</div></div></div>
+    <div class="card"><div class="card-b"><div class="eyebrow">Fausses alertes</div><div style="font-family:var(--f-dis);font-size:26px;font-weight:800">9 %</div><div class="sub dim">signalées par les techniciens</div></div></div>
+  </div>
+
+  <div class="grid split">
+    <div class="card">
+      <div class="card-h"><h3>Ce que l'analyse a repéré</h3><span class="sub">classé par urgence estimée</span></div>
+      <div class="card-b" style="display:flex;flex-direction:column;gap:12px">
+        ${IA.map((i, k) => `
+          <article style="border:1px solid var(--line);border-radius:10px;padding:14px;background:rgba(255,255,255,.015)">
+            <div class="between" style="align-items:flex-start">
+              <div>
+                <div style="font-family:var(--f-dis);font-weight:700;font-size:15px"><span class="led ${i.sev === 'info' ? 'info' : i.sev}" style="margin-right:8px"></span>${i.titre}</div>
+                <div class="mono faint" style="font-size:11px;margin-top:3px">${i.cible} · ${i.base}</div>
+              </div>
+              <div style="text-align:right;flex:none;margin-left:12px">
+                <div class="mono" style="font-size:11px;color:var(--faint)">confiance</div>
+                <div class="mono" style="font-size:17px;color:var(--accent-2)">${i.conf} %</div>
+              </div>
+            </div>
+            <p style="margin:10px 0 0;color:var(--dim);font-size:13px">${esc(i.det)}</p>
+            <div style="margin-top:10px;padding:10px 12px;border-left:2px solid var(--accent);background:var(--accent-dim);border-radius:0 7px 7px 0;font-size:13px">
+              <b>Action recommandée</b> — ${esc(i.action)}
+            </div>
+            <div style="display:flex;gap:8px;margin-top:11px;flex-wrap:wrap">
+              ${i.auto ? `<button class="btn primary sm" data-toast="Action lancée. Suivi dans le journal de remédiation.">${esc(i.autoLabel)}</button>` : ''}
+              <button class="btn sm ghost" data-toast="Procédure envoyée au technicien d'astreinte.">Envoyer au technicien</button>
+              <button class="btn sm ghost" data-toast="Anomalie marquée comme fausse alerte — le modèle en tiendra compte.">Fausse alerte</button>
+            </div>
+          </article>`).join('')}
+      </div>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-h"><h3>Détection sur une métrique</h3><span class="sub">exemple · ventilateur 2</span></div>
+        <div class="card-b">
+          ${areaChart([
+            {n:'Mesure', c:'var(--warn)', v:serie(40, 2480, 40, -9.5)},
+            {n:'Référence', c:'var(--accent)', v:Array.from({length:40}, () => 2470 + rnd() * 20)},
+          ], 420, 165, ['J-40','J-30','J-20','J-10','auj.'])}
+          <div class="dim" style="font-size:12.5px;margin-top:8px">L'écart devient significatif à partir de J-11 et se creuse depuis. Une alerte à seuil fixe ne se serait déclenchée qu'à l'arrêt du ventilateur.</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>Journal des remédiations</h3></div>
+        <div class="feed">${REMED.map(r => `
+          <div class="ev"><div class="t">${r.t.split(' ')[0]}<br>${r.t.split(' ')[1]}</div>
+            <div class="body"><div class="title" style="font-size:12.5px">${esc(r.txt)}</div><div class="sub">${esc(r.res)}</div></div>
+            <div class="act"><span class="tag ${r.ok ? 'ok' : 'crit'}">${r.ok ? 'OK' : 'échec'}</span></div></div>`).join('')}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ============================================================
+   11 — Rapports (§6)
+   ============================================================ */
+function vReports() {
+  return `
+  <div class="page-h">
+    <div><div class="eyebrow">§6 — rapports périodiques automatiques</div>
+      <h1>Rapports</h1>
+      <p>Générés chaque lundi et le 1er du mois, envoyés par e-mail aux destinataires choisis, exportables en PDF ou Excel.</p></div>
+    <div class="right"><button class="btn primary" data-toast="Rapport généré et envoyé aux destinataires.">Générer maintenant</button></div>
+  </div>
+
+  <div class="grid c3" style="margin-bottom:14px">
+    ${[
+      ['Disponibilité mensuelle','Juillet 2026','Dispo par site et par équipement, incidents, temps de rétablissement moyen','PDF · 14 p.'],
+      ['Sauvegardes hebdomadaire','Sem. 31','Réussites, échecs, machines non protégées, écarts de rétention','PDF · 6 p.'],
+      ['Inventaire & firmwares','02/08/2026','Parc complet, versions, équipements en fin de support, CVE','Excel'],
+      ['Capacity planning','T2 2026','Ports libres par site, tendance, extension à prévoir sous 12 mois','PDF · 9 p.'],
+      ['Incidents & alertes','Juillet 2026','Volume, répartition par cause, alertes récurrentes','PDF · 11 p.'],
+      ['Audit des accès','Juillet 2026','Sessions CLI, restaurations, lectures du coffre-fort','PDF · 4 p.'],
+    ].map(r => `
+      <div class="card"><div class="card-b">
+        <div class="eyebrow">${r[1]}</div>
+        <h3 style="font-size:15px;margin:6px 0 7px">${r[0]}</h3>
+        <p class="dim" style="margin:0;font-size:12.5px">${r[2]}</p>
+        <div class="between" style="margin-top:13px">
+          <span class="tag">${r[3]}</span>
+          <span style="display:flex;gap:6px">
+            <button class="btn sm ghost" data-toast="Rapport ouvert.">Voir</button>
+            <button class="btn sm ghost" data-toast="Rapport téléchargé.">Télécharger</button>
+          </span>
+        </div>
+      </div></div>`).join('')}
+  </div>
+
+  <div class="grid split">
+    <div class="card">
+      <div class="card-h"><h3>Disponibilité par site</h3><span class="sub">12 derniers mois</span></div>
+      <div class="card-b">${areaChart([
+        {n:'Caen', c:'var(--accent)', v:serie(12, 99.8, .3)},
+        {n:'Rouen', c:'var(--crit)', v:serie(12, 99.2, .8)},
+        {n:'Le Havre', c:'var(--info)', v:serie(12, 99.6, .5)},
+      ], 600, 200, ['sept.','déc.','mars','juin'])}</div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Tableaux de bord</h3><span class="sub">par rôle</span></div>
+      <div class="card-b">
+        <div class="minirow" style="flex-direction:column;gap:11px">
+          <div class="between" style="width:100%"><span><b>Direction</b><div class="faint" style="font-size:11.5px">Dispo, incidents, conformité des sauvegardes</div></span><span class="tag acc">3 vues</span></div>
+          <div class="between" style="width:100%"><span><b>Technicien N1</b><div class="faint" style="font-size:11.5px">Alertes du jour, sauvegardes, ports en erreur</div></span><span class="tag acc">5 vues</span></div>
+          <div class="between" style="width:100%"><span><b>Technicien N2</b><div class="faint" style="font-size:11.5px">Métriques détaillées, CLI, remédiations</div></span><span class="tag acc">8 vues</span></div>
+          <div class="between" style="width:100%"><span><b>Écran mural NOC</b><div class="faint" style="font-size:11.5px">Vue globale plein écran, rotation 30 s</div></span><span class="tag acc">1 vue</span></div>
+        </div>
+        <hr class="sep">
+        <button class="btn" style="width:100%" data-toast="Éditeur de tableau de bord ouvert.">Créer un tableau de bord</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ============================================================
+   12 — Administration (§7 + §8)
+   ============================================================ */
+let ADM_TAB = 'users';
+function vAdmin() {
+  const tabs = [['users','Utilisateurs & rôles'],['vault','Coffre-fort'],['agents','Agents des sites'],['audit','Journal d\'audit'],['api','API & intégrations']];
+  return `
+  <div class="page-h">
+    <div><div class="eyebrow">§7 · §8 — sécurité, multi-sites</div>
+      <h1>Administration</h1>
+      <p>Comptes, credentials, agents locaux et traçabilité des actions.</p></div>
+    <div class="right"><button class="btn ghost" data-toast="Sauvegarde de la configuration lancée.">Sauvegarder la configuration</button></div>
+  </div>
+  <div class="tabs">${tabs.map(([k, l]) => `<button class="tab ${ADM_TAB === k ? 'on' : ''}" data-admtab="${k}">${l}</button>`).join('')}</div>
+  ${ADM_TAB === 'users' ? admUsers() : ADM_TAB === 'vault' ? admVault() : ADM_TAB === 'agents' ? admAgents() : ADM_TAB === 'audit' ? admAudit() : admApi()}`;
+}
+function admUsers() {
+  return `<div class="card">
+    <div class="card-h"><h3>Comptes</h3><div class="right"><button class="btn sm primary" data-toast="Invitation envoyée.">Inviter</button></div></div>
+    <div class="tw"><table><thead><tr><th>Nom</th><th>Rôle</th><th>Adresse</th><th>2FA</th><th>Sites</th><th>Accès CLI</th><th>Peut restaurer</th><th>Dernière activité</th></tr></thead>
+    <tbody>${USERS.map(u => `<tr>
+      <td><b>${u.n}</b></td><td>${u.r}</td><td class="mono dim">${u.mail}</td>
+      <td>${u.tfa ? '<span class="tag ok">activée</span>' : '<span class="tag warn">absente</span>'}</td>
+      <td class="dim">${u.sites}</td>
+      <td>${u.cli ? '<span class="tag ok">oui</span>' : '<span class="tag">non</span>'}</td>
+      <td>${u.resto ? '<span class="tag acc">oui</span>' : '<span class="tag">non</span>'}</td>
+      <td class="num dim">${u.last}</td></tr>`).join('')}</tbody></table></div>
+  </div>
+  <div class="grid c3" style="margin-top:14px">
+    ${[
+      ['Administrateur','Tout, y compris les rôles, le coffre-fort et les restaurations.'],
+      ['Technicien N2','Supervision, CLI, acquittement, remédiation, restauration après double validation.'],
+      ['Technicien N1','Supervision, acquittement, relance de sauvegarde. Pas de restauration.'],
+      ['Lecture seule','Consultation des tableaux de bord et des rapports.'],
+      ['API','Lecture des alertes et de l\'inventaire par jeton, sans accès à l\'interface.'],
+      ['Peut restaurer','Droit distinct, attribuable indépendamment du rôle.'],
+    ].map(r => `<div class="card"><div class="card-b"><h3 style="font-size:14px">${r[0]}</h3><p class="dim" style="margin:6px 0 0;font-size:12.5px">${r[1]}</p></div></div>`).join('')}
+  </div>`;
+}
+function admVault() {
+  return `<div class="grid split">
+    <div class="card">
+      <div class="card-h"><h3>Comptes d'accès aux équipements</h3><span class="sub">chiffrés · jamais affichés</span>
+        <div class="right"><button class="btn sm primary" data-toast="Nouveau compte enregistré dans le coffre-fort.">Ajouter</button></div></div>
+      <div class="tw"><table><thead><tr><th>Compte</th><th>Utilisé par</th><th>Protocole</th><th>Rotation</th><th>Dernier usage</th><th></th></tr></thead><tbody>
+        <tr><td><b>admin-switchs</b></td><td class="dim">42 switches</td><td class="dim">SSH · SNMPv3</td><td class="num dim">il y a 34 j</td><td class="num dim">14:06</td><td><button class="btn sm ghost" data-toast="Rotation programmée cette nuit.">Faire tourner</button></td></tr>
+        <tr><td><b>svc-snmp-ro</b></td><td class="dim">131 équipements</td><td class="dim">SNMPv3 authPriv</td><td class="num dim">il y a 12 j</td><td class="num dim">14:11</td><td><button class="btn sm ghost" data-toast="Rotation programmée cette nuit.">Faire tourner</button></td></tr>
+        <tr><td><b>svc-ipmi</b></td><td class="dim">18 serveurs</td><td class="dim">Redfish HTTPS</td><td class="num dim">il y a 61 j</td><td class="num dim">14:10</td><td><button class="btn sm ghost" data-toast="Rotation programmée cette nuit.">Faire tourner</button></td></tr>
+        <tr><td><b>svc-veeam-api</b></td><td class="dim">2 serveurs de backup</td><td class="dim">API REST</td><td class="num dim">il y a 8 j</td><td class="num dim">03:04</td><td><button class="btn sm ghost" data-toast="Rotation programmée cette nuit.">Faire tourner</button></td></tr>
+      </tbody></table></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Chiffrement</h3></div>
+      <div class="card-b">
+        <div class="minirow" style="flex-direction:column;gap:10px">
+          <div class="between" style="width:100%"><span>Interface web</span><span class="tag ok">HTTPS · TLS 1.3</span></div>
+          <div class="between" style="width:100%"><span>Interrogation des équipements</span><span class="tag ok">SNMPv3 authPriv</span></div>
+          <div class="between" style="width:100%"><span>Agent site → central</span><span class="tag ok">mTLS</span></div>
+          <div class="between" style="width:100%"><span>Coffre-fort</span><span class="tag ok">AES-256 · clé en HSM logiciel</span></div>
+          <div class="between" style="width:100%"><span>Authentification</span><span class="tag ok">2FA TOTP obligatoire</span></div>
+        </div>
+        <hr class="sep">
+        <div class="okbox">Aucun mot de passe d'équipement n'est envoyé au navigateur : le bastion ouvre la session côté serveur et ne retransmet que l'affichage du terminal.</div>
+      </div>
+    </div>
+  </div>`;
+}
+function admAgents() {
+  return `<div class="card">
+    <div class="card-h"><h3>Agents locaux</h3><span class="sub">un par site · résistants aux coupures</span></div>
+    <div class="tw"><table><thead><tr><th></th><th>Site</th><th>Version</th><th>Liaison</th><th>Latence</th><th>Métriques en tampon</th><th>Dernière synchro</th><th>Mode</th></tr></thead>
+    <tbody>${SITES.map(s => `<tr>
+      <td><span class="led ${s.agent === 'connecté' ? 'ok' : 'warn'}"></span></td>
+      <td><b>${s.nom}</b><div class="faint mono" style="font-size:11px">cœur ${s.core}</div></td>
+      <td class="num dim">1.4.2</td><td class="dim">${s.lien}</td>
+      <td class="num">${s.latence} ms</td>
+      <td class="num ${s.agent === 'connecté' ? 'dim' : ''}" style="${s.agent === 'connecté' ? '' : 'color:var(--warn)'}">${s.agent === 'connecté' ? '0' : '4 210'}</td>
+      <td class="num dim">${s.agent === 'connecté' ? 'il y a 12 s' : 'il y a 2 h 41'}</td>
+      <td>${s.agent === 'connecté' ? '<span class="tag ok">synchronisé</span>' : '<span class="tag warn">autonome</span>'}</td>
+    </tr>`).join('')}</tbody></table></div>
+  </div>
+  <div class="grid c2" style="margin-top:14px">
+    <div class="card"><div class="card-h"><h3>Fonctionnement en mode autonome</h3></div>
+      <div class="card-b dim" style="font-size:13px;line-height:1.75">
+        Quand la liaison vers le central tombe, l'agent continue de collecter et d'évaluer les seuils localement.
+        Les alertes critiques partent directement par SMS depuis le site. À la reconnexion, l'historique est renvoyé
+        dans l'ordre, sans trou dans les graphiques.
+        <hr class="sep">
+        <div class="eyebrow" style="margin-bottom:8px">Tampon local</div>
+        ${meter('Cherbourg — occupation du tampon', 34)}
+        ${meter('Bande passante utilisée pour la synchro', 12)}
+      </div>
+    </div>
+    <div class="card"><div class="card-h"><h3>Consommation par site</h3><span class="sub">trafic de supervision, 24 h</span></div>
+      <div class="card-b">${areaChart([{n:'Ko/s', c:'var(--accent)', v:serie(48, 26, 12)}], 480, 170, HOURS)}
+      <div class="dim" style="font-size:12.5px;margin-top:6px">Compression et échantillonnage adaptés aux liaisons lentes : Le Havre (SDSL) est plafonné à 15 Ko/s.</div></div>
+    </div>
+  </div>`;
+}
+function admAudit() {
+  return `<div class="card">
+    <div class="card-h"><h3>Journal d'audit</h3><span class="sub">qui a fait quoi, quand — non modifiable</span>
+      <div class="right"><button class="btn sm ghost" data-toast="Journal exporté (CSV).">Exporter</button></div></div>
+    <div class="tw"><table><thead><tr><th>Horodatage</th><th>Utilisateur</th><th>Action</th><th>Détail</th></tr></thead>
+    <tbody>${AUDIT.map(a => `<tr><td class="num dim">${a.t}</td><td><b>${a.u}</b></td><td>${a.a}</td><td class="dim">${esc(a.c)}</td></tr>`).join('')}</tbody></table></div>
+  </div>`;
+}
+function admApi() {
+  return `<div class="grid split">
+    <div class="card">
+      <div class="card-h"><h3>API REST</h3><span class="sub">jeton par intégration</span></div>
+      <div class="card-b mono" style="font-size:12px;color:var(--dim);line-height:2">
+        GET  /api/v1/sites<br>
+        GET  /api/v1/devices?site=rou&type=switch<br>
+        GET  /api/v1/metrics/{device}/{metric}?from=…&to=…<br>
+        GET  /api/v1/alerts?severity=critical&ack=false<br>
+        POST /api/v1/alerts/{id}/ack<br>
+        GET  /api/v1/backups/compliance<br>
+        POST /api/v1/backups/{job}/run<br>
+        GET  /api/v1/topology/{site}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Intégrations</h3></div>
+      <div class="card-b">
+        <div class="minirow" style="flex-direction:column;gap:11px">
+          <div class="between" style="width:100%"><span><b>ITSM — création de ticket</b><div class="faint" style="font-size:11.5px">Sur alerte critique non acquittée après 15 min</div></span><span class="tag ok">actif</span></div>
+          <div class="between" style="width:100%"><span><b>Veeam Backup & Replication</b><div class="faint" style="font-size:11.5px">Lecture des jobs, déclenchement des restaurations</div></span><span class="tag ok">actif</span></div>
+          <div class="between" style="width:100%"><span><b>Annuaire (LDAP)</b><div class="faint" style="font-size:11.5px">Comptes et rôles synchronisés</div></span><span class="tag ok">actif</span></div>
+          <div class="between" style="width:100%"><span><b>Webhook générique</b><div class="faint" style="font-size:11.5px">JSON sur chaque changement d'état</div></span><span class="tag">à configurer</span></div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ============================================================
+   Modales
+   ============================================================ */
+function modal(html) { document.getElementById('layer').innerHTML = `<div class="mask" data-close>${html}</div>`; }
+function closeModal() { document.getElementById('layer').innerHTML = ''; }
+function toast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast'; t.innerHTML = `<div style="font-size:13px">${esc(msg)}</div>`;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 3200);
+}
+const MODALS = {
+  discover: () => `<div class="modal" onclick="event.stopPropagation()">
+    <div class="m-h"><h3>Ajouter un site</h3><span class="sub mono">§1 — découverte récursive</span></div>
+    <div class="m-b">
+      <p class="dim" style="margin:0 0 4px">Une seule information est nécessaire : l'adresse IP du cœur de réseau. La plateforme découvre ensuite le reste toute seule, de proche en proche.</p>
+      <div class="field"><label>Nom du site</label><input value="Évreux — Agence" id="dName"></div>
+      <div class="field"><label>Adresse IP du cœur de réseau</label><input value="10.60.0.1" id="dIp"></div>
+      <div class="field"><label>Profil SNMP</label><select><option>SNMPv3 — svc-snmp-ro (coffre-fort)</option><option>SNMPv2c — communauté</option></select></div>
+      <label class="check"><input type="checkbox" checked> Suivre les voisins CDP/LLDP de proche en proche</label>
+      <label class="check"><input type="checkbox" checked> Interroger les serveurs découverts (IPMI / Redfish / agent)</label>
+      <label class="check"><input type="checkbox"> Scanner aussi les plages IP du site (complément)</label>
+      <div class="disc" id="discLog" style="margin-top:14px"><div class="l faint">En attente du lancement…</div></div>
+    </div>
+    <div class="m-f"><button class="btn ghost" data-close-btn>Fermer</button><button class="btn primary" id="discBtn">Lancer la découverte</button></div>
+  </div>`,
+  restore: () => `<div class="modal" onclick="event.stopPropagation()">
+    <div class="m-h"><span class="led warn"></span><h3>Restaurer des données</h3></div>
+    <div class="m-b">
+      <div class="field"><label>Machine</label><select><option>CAE-FS-01</option><option>CAE-ESX-01</option><option>ROU-DB-01</option></select></div>
+      <div class="field"><label>Point de sauvegarde</label><select><option>02/08 02:31 — complète — 910 Go</option><option>01/08 02:29 — incrémentale — 34 Go</option><option>31/07 02:31 — incrémentale — 41 Go</option></select></div>
+      <div class="field"><label>Périmètre</label><select><option>Dossier \\Compta\\2026</option><option>Machine entière</option><option>Fichiers sélectionnés</option></select></div>
+      <div class="field"><label>Destination</label><select><option>Emplacement d'origine (écrasement)</option><option>Nouvel emplacement</option></select></div>
+      <div class="warnbox">La restauration est exécutée par Veeam via son API. La plateforme transmet la demande, suit la progression et journalise l'opération.</div>
+      <label class="check"><input type="checkbox" id="r1"> Je confirme que la restauration écrasera les données actuelles.</label>
+      <label class="check"><input type="checkbox" id="r2"> Demander la validation d'un second administrateur (obligatoire sur systèmes critiques).</label>
+      <div class="field"><label>Saisissez le nom de la machine pour confirmer</label><input id="r3" placeholder="CAE-FS-01"></div>
+      <div class="okbox">Une simulation est disponible : elle liste ce qui serait restauré sans rien écrire.</div>
+    </div>
+    <div class="m-f">
+      <button class="btn ghost" data-close-btn>Annuler</button>
+      <button class="btn" data-toast="Simulation terminée : 2 412 fichiers (41 Go) seraient restaurés.">Simuler</button>
+      <button class="btn danger" id="doRestore">Restaurer</button>
+    </div>
+  </div>`,
+  maint: () => `<div class="modal" onclick="event.stopPropagation()">
+    <div class="m-h"><h3>Fenêtre de maintenance</h3></div>
+    <div class="m-b">
+      <div class="field"><label>Périmètre</label><select><option>Un site entier</option><option>Un équipement</option><option>Un groupe</option></select></div>
+      <div class="field"><label>Site</label><select>${SITES.map(s => `<option>${s.nom}</option>`).join('')}</select></div>
+      <div class="row"><div class="field" style="flex:1"><label>Début</label><input value="03/08/2026 20:00"></div>
+      <div class="field" style="flex:1"><label>Fin</label><input value="03/08/2026 23:00"></div></div>
+      <div class="field"><label>Motif (visible dans l'audit)</label><input value="Remplacement du switch d'étage"></div>
+      <label class="check"><input type="checkbox" checked> Suspendre les notifications (la collecte continue)</label>
+      <label class="check"><input type="checkbox" checked> Exclure cette période du calcul de disponibilité</label>
+    </div>
+    <div class="m-f"><button class="btn ghost" data-close-btn>Annuler</button><button class="btn primary" data-toast="Fenêtre de maintenance planifiée.">Planifier</button></div>
+  </div>`,
+  rule: () => `<div class="modal" onclick="event.stopPropagation()">
+    <div class="m-h"><h3>Règle d'alerte</h3></div>
+    <div class="m-b">
+      <div class="field"><label>Métrique</label><select><option>Température du châssis</option><option>Erreurs CRC par port</option><option>Espace disque</option><option>Sauvegarde non exécutée</option></select></div>
+      <div class="row"><div class="field" style="flex:1"><label>Avertissement</label><input value="> 55 °C pendant 5 min"></div>
+      <div class="field" style="flex:1"><label>Critique</label><input value="> 65 °C"></div></div>
+      <div class="field"><label>Périmètre</label><select><option>Tous les switches</option><option>Un site</option><option>Un équipement</option></select></div>
+      <div class="field"><label>Notification</label><select><option>E-mail + Teams</option><option>E-mail + SMS astreinte</option><option>Webhook ITSM</option></select></div>
+      <label class="check"><input type="checkbox" checked> Regrouper avec les alertes corrélées du même équipement</label>
+      <label class="check"><input type="checkbox" checked> Escalader si non acquittée après 15 minutes</label>
+    </div>
+    <div class="m-f"><button class="btn ghost" data-close-btn>Annuler</button><button class="btn primary" data-toast="Règle enregistrée.">Enregistrer</button></div>
+  </div>`,
+  autorules: () => `<div class="modal" onclick="event.stopPropagation()">
+    <div class="m-h"><span class="phase2">Phase 2</span><h3>Actions automatiques autorisées</h3></div>
+    <div class="m-b">
+      <p class="dim" style="margin:0 0 10px">L'auto-remédiation n'exécute que ce qui est coché ici. Tout le reste est proposé au technicien sans être lancé.</p>
+      <label class="check"><input type="checkbox" checked> Relancer une sauvegarde échouée (1 tentative)</label>
+      <label class="check"><input type="checkbox" checked> Redémarrer un service applicatif surveillé</label>
+      <label class="check"><input type="checkbox" checked> Exécuter un script de purge validé (liste blanche)</label>
+      <label class="check"><input type="checkbox"> Redémarrer un port de switch en erreur</label>
+      <label class="check"><input type="checkbox"> Redémarrer un serveur</label>
+      <label class="check"><input type="checkbox"> Basculer un service sur un nœud de secours</label>
+      <hr class="sep">
+      <div class="warnbox">Chaque exécution est journalisée, notifiée, et annulable manuellement. Une action qui échoue deux fois est automatiquement transmise à un technicien.</div>
+    </div>
+    <div class="m-f"><button class="btn ghost" data-close-btn>Fermer</button><button class="btn primary" data-toast="Autorisations enregistrées.">Enregistrer</button></div>
+  </div>`,
+  histo: () => `<div class="modal" onclick="event.stopPropagation()">
+    <div class="m-h"><h3>Historique de la topologie</h3></div>
+    <div class="m-b">
+      <p class="dim" style="margin:0 0 12px">Chaque cycle de découverte est comparé au précédent. Les différences sont conservées pour retrouver l'état du réseau à une date donnée.</p>
+      <div class="field"><label>Revenir à</label><select><option>02/08/2026 06:00 (actuel)</option><option>01/08/2026 06:00</option><option>28/07/2026 06:00</option><option>01/07/2026 06:00</option></select></div>
+      <div class="okbox">Entre le 01/07 et aujourd'hui : 12 équipements ajoutés, 3 retirés, 8 changements de câblage.</div>
+    </div>
+    <div class="m-f"><button class="btn ghost" data-close-btn>Fermer</button><button class="btn primary" data-toast="Comparaison affichée sur la carte.">Comparer</button></div>
+  </div>`,
+};
+
+/* ============================================================
+   Découverte animée
+   ============================================================ */
+const DISC_STEPS = [
+  ['00.0','Connexion SNMPv3 à 10.60.0.1…'],
+  ['00.4','Cœur identifié : Cisco C9300-24P · IOS-XE 17.09.04a · série FCW2451K1PP'],
+  ['01.1','Lecture de la table de voisinage LLDP : 4 voisins'],
+  ['01.6','→ EVX-ETG1-SW02 (10.60.0.11) · Cisco C9200-24P'],
+  ['02.0','→ EVX-ETG2-SW03 (10.60.0.12) · HPE 2930F-24G'],
+  ['02.4','→ EVX-WIFI-SW04 (10.60.0.13) · Cisco C1000-8P'],
+  ['02.9','Descente niveau 2 : lecture des voisins de chaque switch…'],
+  ['03.5','→ EVX-SRV-01 (10.60.1.10) · Dell R450 · Redfish détecté'],
+  ['04.0','→ EVX-NAS-01 (10.60.1.20) · Synology · SNMP détecté'],
+  ['04.6','Lecture des tables CAM : 63 adresses MAC sur 4 switches'],
+  ['05.2','Relevé des VLAN : 5 VLAN (10, 20, 30, 40, 99)'],
+  ['05.8','Relevé des ports : 88 ports · 41 actifs · 47 libres'],
+  ['06.3','Vérification des firmwares contre la base CVE : 1 alerte'],
+  ['06.9','Topologie reconstruite · 11 équipements · 12 liens'],
+  ['07.2','✓ Découverte terminée. Site prêt à être supervisé.'],
+];
+function runDiscovery() {
+  const log = document.getElementById('discLog'); if (!log) return;
+  log.innerHTML = ''; let i = 0;
+  const t = setInterval(() => {
+    if (i >= DISC_STEPS.length) { clearInterval(t); toast('Site ajouté : 11 équipements découverts.'); return; }
+    const [s, txt] = DISC_STEPS[i++];
+    const d = document.createElement('div');
+    d.className = 'l';
+    d.innerHTML = `<b>${s}s</b><span style="color:${txt.startsWith('✓') ? 'var(--ok)' : txt.startsWith('→') ? 'var(--text)' : 'var(--dim)'}">${esc(txt)}</span>`;
+    log.appendChild(d); log.scrollTop = log.scrollHeight;
+  }, 420);
+}
+
+/* ============================================================
+   Rendu & interactions
+   ============================================================ */
+const VIEWS = {overview:vOverview, site:vSite, topo:vTopo, inv:vInv, switch:vSwitch, server:vServer,
+  backup:vBackup, alerts:vAlerts, cli:vCli, ia:vIa, reports:vReports, admin:vAdmin};
+function render() {
+  seed = 42;
+  document.getElementById('view').innerHTML = VIEWS[CUR]();
+  document.getElementById('crumb').innerHTML = CRUMBS[CUR].replace(/\/ (.*)$/, '/ <b>$1</b>');
+  const openCrit = ALERTES.filter(a => a.sev === 'crit' && !a.ack).length;
+  document.getElementById('alertPill').innerHTML = `<span class="led crit"></span>${openCrit} alertes critiques`;
+  document.getElementById('agentPill').innerHTML = `<span class="led ok"></span>6 sites · 5 agents synchronisés`;
+  const ss = document.getElementById('siteSel');
+  if (ss) ss.onchange = e => { CUR_SITE = e.target.value; render(); };
+  const cs = document.getElementById('cliSel');
+  if (cs) cs.onchange = e => { CLI_TARGET = e.target.value; render(); };
+  const ti = document.getElementById('termIn');
+  if (ti) { ti.focus(); ti.onkeydown = e => { if (e.key === 'Enter') cliRun(ti.value); }; }
+}
+document.addEventListener('click', e => {
+  const t = e.target;
+  const g = s => t.closest(s);
+  if (g('[data-site]')) { CUR_SITE = g('[data-site]').dataset.site; go('site'); return; }
+  if (g('[data-eq]')) {
+    const id = g('[data-eq]').dataset.eq;
+    const eq = eqById(id);
+    go(eq && (eq.type.includes('Switch')) ? 'switch' : 'server'); return;
+  }
+  if (g('[data-cli]')) { CLI_TARGET = g('[data-cli]').dataset.cli; go('cli'); return; }
+  if (g('[data-port]')) { SELPORT = +g('[data-port]').dataset.port; render(); return; }
+  if (g('[data-bktab]')) { BK_TAB = g('[data-bktab]').dataset.bktab; render(); return; }
+  if (g('[data-altab]')) { ALERT_TAB = g('[data-altab]').dataset.altab; render(); return; }
+  if (g('[data-admtab]')) { ADM_TAB = g('[data-admtab]').dataset.admtab; render(); return; }
+  if (g('[data-ack]')) {
+    const a = ALERTES.find(x => x.id === g('[data-ack]').dataset.ack);
+    a.ack = true; a.esc = 'Acquittée par J. Marchand à ' + new Date().toTimeString().slice(0, 5);
+    render(); toast('Alerte acquittée — escalade annulée.'); return;
+  }
+  if (g('[data-modal]')) {
+    const k = g('[data-modal]').dataset.modal;
+    modal(MODALS[k]());
+    const db = document.getElementById('discBtn'); if (db) db.onclick = runDiscovery;
+    const dr = document.getElementById('doRestore');
+    if (dr) dr.onclick = () => {
+      const ok = document.getElementById('r1').checked && document.getElementById('r2').checked
+        && document.getElementById('r3').value.trim().toUpperCase() === 'CAE-FS-01';
+      if (!ok) { toast('Restauration bloquée : les deux confirmations et le nom exact de la machine sont requis.'); return; }
+      closeModal(); toast('Restauration lancée via l\'API Veeam. Les équipes concernées ont été prévenues.');
+    };
+    return;
+  }
+  if (g('[data-toast]')) { toast(g('[data-toast]').dataset.toast); return; }
+  if (g('[data-close-btn]') || t.hasAttribute('data-close')) { closeModal(); return; }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+renderNav(); render();
+</script>
+</body>
+</html>
